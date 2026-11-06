@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruseta - Mapa de Rutas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background-color: #0b1d3a; }
+        
+        /* Contenedor del mapa a pantalla completa */
+        #mapa-cucuta {
+            height: 100vh;
+            width: 100%;
+        }
+
+        /* Botón para volver al login */
+        .btn-volver {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            padding: 10px 20px;
+            background-color: #00d2ff;
+            color: #1d3c6f;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <button class="btn-volver" onclick="window.location.href='index.html'">Cerrar Sesión</button>
+    
+    <div id="mapa-cucuta"></div>
+
+    <script>
+        let mapa;
+
+        function iniciarMapa() {
+            // Coordenadas centrales de Cúcuta
+            const cucuta = { lat: 7.89391, lng: -72.50782 };
+
+            // Opciones del mapa con el estilo azul oscuro de tu prototipo
+            const opcionesMapa = {
+                zoom: 13,
+                center: cucuta,
+                disableDefaultUI: true, // Interfaz limpia sin botones extra de Google
+                styles: [
+                    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+                    { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+                ]
+            };
+
+            mapa = new google.maps.Map(document.getElementById("mapa-cucuta"), opcionesMapa);
+        }
+    </script>
+
+    <!-- REEMPLAZA AQUÍ TU CREDENCIAL DE GOOGLE CLOUD -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&callback=iniciarMapa" async defer></script>
+</body>
+</html>

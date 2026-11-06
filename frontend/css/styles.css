@@ -1,0 +1,162 @@
+/* --- ESTILOS GENERALES Y FONDOS --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #0b1d3a;
+    color: #ffffff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+/* --- TARJETA DE LOGIN --- */
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+}
+
+.login-box {
+    background-color: #142850;
+    padding: 40px 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    text-align: center;
+    animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.logo-text {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #00d2ff;
+    margin-bottom: 5px;
+    letter-spacing: 2px;
+}
+
+.subtitle {
+    font-size: 0.9rem;
+    color: #a0aec0;
+    margin-bottom: 30px;
+}
+
+/* --- CAMPOS DE TEXTO CON ÍCONOS --- */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 25px;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-icon {
+    position: absolute;
+    left: 14px;
+    width: 22px;
+    height: 22px;
+    fill: #64748b;
+    transition: fill 0.3s ease;
+    pointer-events: none;
+}
+
+.input-field {
+    width: 100%;
+    padding: 14px 15px 14px 44px;
+    background-color: rgba(11, 29, 58, 0.5);
+    border: 2px solid #27496d;
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.input-wrapper:focus-within .input-icon {
+    fill: #00d2ff;
+}
+
+.input-field:focus {
+    outline: none;
+    border-color: #00d2ff;
+    background-color: rgba(11, 29, 58, 0.9);
+    box-shadow: 0 0 15px rgba(0, 210, 255, 0.25);
+}
+
+/* --- BOTONES Y SEPARADOR --- */
+.btn-primary {
+    width: 100%;
+    padding: 12px;
+    background-color: #00d2ff;
+    color: #0b1d3a;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.1s;
+}
+
+.btn-primary:hover {
+    background-color: #00b4d8;
+}
+
+.btn-primary:active {
+    transform: scale(0.96);
+}
+
+.divider {
+    margin: 20px 0;
+    color: #a0aec0;
+    font-size: 0.85rem;
+}
+
+.btn-guest {
+    width: 100%;
+    padding: 12px;
+    background-color: transparent;
+    color: #ffffff;
+    border: 1px solid #a0aec0;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.1s;
+}
+
+.btn-guest:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.btn-guest:active {
+    transform: scale(0.96);
+}
+
+/* --- ANIMACIONES --- */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.shake {
+    animation: shakeAnim 0.4s ease-in-out;
+}
+
+@keyframes shakeAnim {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+}   
