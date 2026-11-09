@@ -28,19 +28,30 @@ def conectar_bd():
 def estado_servidor():
     return {"mensaje": "Servidor de Ruseta en línea y esperando conexiones"}
 
-# Endpoint para enviar las rutas al mapa
+# Endpoint para enviar las rutas al mapa con puntos de origen y destino
 @app.get("/api/rutas")
 def obtener_rutas():
     try:
         conexion = conectar_bd()
         with conexion.cursor() as cursor:
-            # Consultamos las rutas y fingimos unas coordenadas de origen/destino temporales
-            # (Más adelante las cruzaremos con la tabla de comunas real)
+            # Consultamos las rutas reales de la base de datos
             sql = "SELECT id, nombre_ruta FROM rutas"
             cursor.execute(sql)
             rutas_db = cursor.fetchall()
             
         conexion.close()
-        return {"estado": "exito", "rutas": rutas_db}
+        
+        # Asignamos coordenadas de origen y destino (Ejemplo en Cúcuta)
+        # Esto simula un trayecto desde Los Patios (origen) hasta el Centro (destino)
+        rutas_con_coordenadas = []
+        for ruta in rutas_db:
+            rutas_con_coordenadas.append({
+                "id": ruta["id"],
+                "nombre": ruta["nombre_ruta"],
+                "origen": {"lat": 7.8285, "lng": -72.5042}, # Los Patios
+                "destino": {"lat": 7.8939, "lng": -72.5078} # Centro Cúcuta
+            })
+
+        return {"estado": "exito", "rutas": rutas_con_coordenadas}
     except Exception as e:
         return {"estado": "error", "detalle": str(e)}
