@@ -8,13 +8,11 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background-color: #0b1d3a; }
         
-        /* Contenedor del mapa a pantalla completa */
         #mapa-cucuta {
             height: 100vh;
             width: 100%;
         }
 
-        /* Botón para volver al login */
         .btn-volver {
             position: absolute;
             top: 20px;
@@ -38,47 +36,17 @@
     <div id="mapa-cucuta"></div>
 
     <script>
-        // Función para cargar y mostrar las rutas y busetas en el mapa
-async function cargarRutasYBusetas() {
-    try {
-        const respuesta = await fetch('http://127.0.0.1:8000/api/rutas');
-        const resultado = await respuesta.json();
-
-        if (resultado.estado === "exito") {
-            console.log("Datos obtenidos de la base de datos:", resultado.rutas);
-            
-            // Ejemplo básico para recorrer las rutas/busetas y pintarlas en el mapa
-            // (Asegúrate de tener inicializada tu variable 'map' de Google Maps)
-            resultado.rutas.forEach(ruta => {
-                // Si tu API también devuelve coordenadas de busetas, puedes iterarlas aquí
-                // const myLatLng = { lat: parseFloat(ruta.latitud), lng: parseFloat(ruta.longitud) };
-                // new google.maps.Marker({
-                //     position: myLatLng,
-                //     map: map,
-                //     title: ruta.nombre_ruta
-                // });
-            });
-        }
-    } catch (error) {
-        console.error("Error al conectar con la API de Ruseta:", error);
-    }
-}
-
-// Ejecutar la función cuando cargue la ventana
-window.onload = cargarRutasYBusetas;
-
-
         let mapa;
+        let directionsService;
+        let directionsRenderer;
 
         function iniciarMapa() {
-            // Coordenadas centrales de Cúcuta
             const cucuta = { lat: 7.89391, lng: -72.50782 };
 
-            // Opciones del mapa con el estilo azul oscuro de tu prototipo
             const opcionesMapa = {
                 zoom: 13,
                 center: cucuta,
-                disableDefaultUI: true, // Interfaz limpia sin botones extra de Google
+                disableDefaultUI: true,
                 styles: [
                     { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
                     { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
@@ -88,10 +56,51 @@ window.onload = cargarRutasYBusetas;
             };
 
             mapa = new google.maps.Map(document.getElementById("mapa-cucuta"), opcionesMapa);
+
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                map: mapa,
+                suppressMarkers: false,
+                polylineOptions: {
+                    strokeColor: '#00d2ff',
+                    strokeWeight: 5
+                }
+            });
+
+            obtenerYTrazarRutas();
+        }
+
+        async function obtenerYTrazarRutas() {
+            try {
+                const respuesta = await fetch('http://127.0.0.1:8000/api/rutas');
+                const datos = await respuesta.json();
+
+                if (datos.estado === "exito" && datos.rutas.length > 0) {
+                    const ruta = datos.rutas[0];
+                    trazarRutaEnMapa(ruta.origen, ruta.destino);
+                }
+            } catch (error) {
+                console.error("Error obteniendo rutas:", error);
+            }
+        }
+
+        function trazarRutaEnMapa(origen, destino) {
+            const request = {
+                origin: origen,
+                destination: destino,
+                travelMode: 'DRIVING'
+            };
+
+            directionsService.route(request, (result, status) => {
+                if (status == 'OK') {
+                    directionsRenderer.setDirections(result);
+                } else {
+                    console.error("Error al trazar la ruta de Google:", status);
+                }
+            });
         }
     </script>
 
-    <!-- REEMPLAZA AQUÍ TU CREDENCIAL DE GOOGLE CLOUD -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&callback=iniciarMapa" async defer></script>
 </body>
 </html>
