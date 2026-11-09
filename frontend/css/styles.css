@@ -139,6 +139,7 @@ body {
     transform: scale(0.96);
 }
 
+
 /* --- ANIMACIONES --- */
 @keyframes fadeInUp {
     from {
@@ -160,3 +161,8 @@ body {
     20%, 60% { transform: translateX(-8px); }
     40%, 80% { transform: translateX(8px); }
 }   
+.msg-error {
+    color: #ff6b6b;
+    font-size: 0.85rem;
+    min-height: 1.2em;
+}

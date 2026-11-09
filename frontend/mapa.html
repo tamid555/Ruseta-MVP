@@ -7,6 +7,30 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background-color: #0b1d3a; }
+
+        .panel-rutas {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background-color: #142850;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid #27496d;
+        }
+
+        #selector-ruta {
+            background-color: rgba(11, 29, 58, 0.9);
+            color: #ffffff;
+            border: 2px solid #00d2ff;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 1rem;
+            outline: none;
+            cursor: pointer;
+            width: 250px;
+        }
         
         #mapa-cucuta {
             height: 100vh;
@@ -31,14 +55,31 @@
 </head>
 <body>
 
-    <button class="btn-volver" onclick="window.location.href='index.html'">Cerrar Sesión</button>
-    
-    <div id="mapa-cucuta"></div>
+    <!-- Botón de volver / cerrar sesión -->
+<button class="btn-volver" onclick="cerrarSesion()">Cerrar Sesión</button>    
+    <!-- Panel flotante para seleccionar la ruta -->
+    <div class="panel-rutas">
+        <select id="selector-ruta">
+            <option value="">Selecciona una ruta para dibujar...</option>
+        </select>
+    </div>
+
+    <!-- Contenedor del mapa -->
+    <div id="mapa-cucuta"></div>    
 
     <script>
+        if (!sessionStorage.getItem('usuarioRuseta')) {
+    window.location.href = 'index.html';
+}
+
+function cerrarSesion() {
+    sessionStorage.removeItem('usuarioRuseta');
+    window.location.href = 'index.html';
+}
         let mapa;
         let directionsService;
         let directionsRenderer;
+        let rutasGlobales = [];
 
         function iniciarMapa() {
             const cucuta = { lat: 7.89391, lng: -72.50782 };
@@ -48,39 +89,80 @@
                 center: cucuta,
                 disableDefaultUI: true,
                 styles: [
-                    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-                    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-                    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-                    { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-                ]
+    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+    { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#2b3648" }] },
+    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+    { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
+    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
+    { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+]
             };
 
             mapa = new google.maps.Map(document.getElementById("mapa-cucuta"), opcionesMapa);
 
             directionsService = new google.maps.DirectionsService();
             directionsRenderer = new google.maps.DirectionsRenderer({
-                map: mapa,
-                suppressMarkers: false,
-                polylineOptions: {
-                    strokeColor: '#00d2ff',
-                    strokeWeight: 5
-                }
-            });
+            map: mapa,
+            suppressMarkers: false,
+            polylineOptions: {
+                strokeColor: '#a6e4ff', // Azul muy claro (Hielo / Celeste luminoso)
+                strokeWeight: 6,        // Aumentamos el grosor un punto para que destaque más
+                strokeOpacity: 0.9      // Ligera transparencia para que se vea moderno
+            }
+        });
 
             obtenerYTrazarRutas();
         }
 
         async function obtenerYTrazarRutas() {
             try {
+                console.log("Conectando con el backend de Python...");
                 const respuesta = await fetch('http://127.0.0.1:8000/api/rutas');
                 const datos = await respuesta.json();
+                console.log("Datos recibidos del servidor:", datos);
 
                 if (datos.estado === "exito" && datos.rutas.length > 0) {
-                    const ruta = datos.rutas[0];
-                    trazarRutaEnMapa(ruta.origen, ruta.destino);
+                    rutasGlobales = datos.rutas;
+                    const selector = document.getElementById("selector-ruta");
+
+                    // Limpiamos opciones previas para evitar duplicados
+                    selector.innerHTML = '<option value="">Selecciona una ruta para dibujar...</option>';
+
+                    // Llenamos el menú dinámicamente con las rutas de MySQL
+                    rutasGlobales.forEach(ruta => {
+                        let opcion = document.createElement("option");
+                        opcion.value = ruta.id;
+                        opcion.text = ruta.nombre;
+                        selector.appendChild(opcion);
+                    });
+
+                    // Evento al seleccionar una opción del menú desplegable
+                    selector.onchange = function(evento) {
+                        const idSeleccionado = evento.target.value;
+                        if (!idSeleccionado) return;
+
+                        const rutaSeleccionada = rutasGlobales.find(r => r.id == idSeleccionado);
+                        
+                        if (rutaSeleccionada && rutaSeleccionada.origen && rutaSeleccionada.destino) {
+                            console.log("Dibujando ruta:", rutaSeleccionada.nombre);
+                            trazarRutaEnMapa(rutaSeleccionada.origen, rutaSeleccionada.destino);
+                        } else {
+                            console.error("La ruta seleccionada no tiene coordenadas válidas de origen/destino.");
+                        }
+                    };
+
+                } else {
+                    console.warn("La base de datos no devolvió ninguna ruta registrada o está vacía.");
                 }
             } catch (error) {
-                console.error("Error obteniendo rutas:", error);
+                console.error("Error crítico conectando con el backend de Python:", error);
             }
         }
 
@@ -92,10 +174,10 @@
             };
 
             directionsService.route(request, (result, status) => {
-                if (status == 'OK') {
+                if (status === 'OK') {
                     directionsRenderer.setDirections(result);
                 } else {
-                    console.error("Error al trazar la ruta de Google:", status);
+                    console.error("Google Directions falló con el estado:", status);
                 }
             });
         }
