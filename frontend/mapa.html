@@ -5,133 +5,120 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ruseta - Mapa de Rutas</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background-color: #0b1d3a; font-family: sans-serif; }
-
-        /* Contenedor principal del mapa ocupando toda la pantalla */
-        #mapa-cucuta {
-            height: 100vh;
-            width: 100%;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /* Botón de Cerrar Sesión fijo arriba a la izquierda */
-        .btn-volver {
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #mapa-cucuta {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Botón de Cerrar Sesión */
+        .btn-cerrar-sesion {
             position: absolute;
             top: 20px;
             left: 20px;
-            z-index: 20;
-            padding: 10px 20px;
+            z-index: 10;
             background-color: #00d2ff;
-            color: #1d3c6f;
+            color: #0f172a;
             border: none;
-            border-radius: 8px;
+            padding: 10px 20px;
             font-weight: bold;
+            border-radius: 8px;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: background 0.3s ease;
         }
 
-        /* Panel de búsqueda (Planifica tu viaje) ubicado debajo del botón */
-        .panel-busqueda {
+        .btn-cerrar-sesion:hover {
+            background-color: #3a86ff;
+            color: #ffffff;
+        }
+
+        /* Panel Flotante de Planificación */
+        .panel-viaje {
             position: absolute;
-            top: 75px; 
+            top: 80px;
             left: 20px;
             z-index: 10;
-            background-color: rgba(11, 29, 58, 0.95);
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(10px);
             padding: 20px;
             border-radius: 12px;
-            width: 320px;
-            border: 1px solid #00d2ff;
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            width: 340px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .panel-titulo {
-            color: white;
-            font-size: 16px;
-            margin-bottom: 15px;
+        .panel-viaje h3 {
+            color: #ffffff;
             text-align: center;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
         }
 
         .input-grupo {
-            display: flex;
-            align-items: center;
-            background-color: #17263c;
-            border-radius: 8px;
-            padding: 10px;
+            position: relative;
             margin-bottom: 12px;
-            border: 1px solid #242f3e;
         }
 
-        .input-grupo:focus-within {
-            border-color: #00d2ff;
-        }
-
-        .input-grupo input {
-            background: transparent;
-            border: none;
-            color: white;
+        /* Adaptación visual para el componente web de Google */
+        gmp-place-autocomplete {
             width: 100%;
-            outline: none;
-            margin-left: 10px;
-            font-size: 14px;
+            --gmp-color-background: #1e293b;
+            --gmp-color-text: #ffffff;
+            --gmp-color-border: #334155;
+            --gmp-border-radius: 8px;
+            --gmp-box-shadow: none;
+            font-size: 0.9rem;
         }
 
-        .input-grupo input::placeholder {
-            color: #8892b0;
-        }
-
-        .icono-punto {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-        .punto-a { background-color: #00d2ff; }
-        .punto-b { background-color: #ff4757; }
-
-        .btn-buscar {
+        .btn-trazar {
             width: 100%;
-            padding: 12px;
-            background-color: #00d2ff;
-            color: #0b1d3a;
+            padding: 10px;
+            background: linear-gradient(135deg, #00d2ff, #3a86ff);
             border: none;
             border-radius: 8px;
+            color: #ffffff;
             font-weight: bold;
-            font-size: 15px;
             cursor: pointer;
+            transition: opacity 0.3s;
             margin-top: 5px;
         }
 
-        .btn-buscar:hover {
-            background-color: #00a8cc;
+        .btn-trazar:hover {
+            opacity: 0.9;
         }
     </style>
 </head>
 <body>
 
-    <!-- Botón de cerrar sesión -->
-    <button class="btn-volver" onclick="cerrarSesion()">Cerrar Sesión</button>    
-    
-    <!-- Panel flotante de búsqueda -->
-    <div class="panel-busqueda">
-        <h3 class="panel-titulo">Planifica tu viaje</h3>
+    <button class="btn-cerrar-sesion" onclick="cerrarSesion()">Cerrar Sesión</button>
+
+    <div class="panel-viaje">
+        <h3>Planifica tu viaje</h3>
         
-        <div class="input-grupo">
-            <div class="icono-punto punto-a"></div>
-            <input type="text" id="buscador-origen" placeholder="¿Dónde estás? (Punto A)">
-        </div>
+        <div class="input-grupo" id="contenedor-origen"></div>
+        <div class="input-grupo" id="contenedor-destino"></div>
 
-        <div class="input-grupo">
-            <div class="icono-punto punto-b"></div>
-            <input type="text" id="buscador-destino" placeholder="¿A dónde vas? (Punto B)">
-        </div>
-
-        <button id="btn-buscar-ruta" class="btn-buscar">Trazar Ruta</button>
+        <button class="btn-trazar" id="btn-buscar-ruta">Trazar Ruta</button>
     </div>
 
-    <!-- Contenedor del mapa -->
-    <div id="mapa-cucuta"></div>    
+    <div id="mapa-cucuta"></div>
+
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&libraries=places&v=weekly&callback=iniciarMapa"></script>
 
     <script>
-        // Verificación de sesión
         if (!sessionStorage.getItem('usuarioRuseta')) {
             window.location.href = 'index.html';
         }
@@ -144,30 +131,24 @@
         let mapa;
         let directionsService;
         let directionsRenderer;
+        
+        let coordenadaOrigen = null;
+        let coordenadaDestino = null;
 
-        // Definición de los 4 Íconos Personalizados
         const iconOrigen = {
             url: 'assets/icons/origen.svg',
             scaledSize: new google.maps.Size(40, 40),
             anchor: new google.maps.Point(20, 40)
         };
-
         const iconDestino = {
             url: 'assets/icons/destino.svg',
             scaledSize: new google.maps.Size(40, 40),
             anchor: new google.maps.Point(20, 40)
         };
-
         const iconBuseta = {
             url: 'assets/icons/bus.svg',
             scaledSize: new google.maps.Size(35, 35),
             anchor: new google.maps.Point(17, 17)
-        };
-
-        const iconPOI = {
-            url: 'assets/icons/poi.svg',
-            scaledSize: new google.maps.Size(30, 30),
-            anchor: new google.maps.Point(15, 30)
         };
 
         function crearMarcador(posicion, icono, titulo) {
@@ -180,7 +161,7 @@
             });
         }
 
-        function iniciarMapa() {
+        async function iniciarMapa() {
             const cucuta = { lat: 7.89391, lng: -72.50782 };
 
             const opcionesMapa = {
@@ -217,21 +198,54 @@
                 }
             });
 
-            // Evento para el botón de Trazar Ruta manual usando los inputs
-            document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
-                const origenTexto = document.getElementById('buscador-origen').value;
-                const destinoTexto = document.getElementById('buscador-destino').value;
+            await google.maps.importLibrary("places");
 
-                if (!origenTexto || !destinoTexto) {
-                    alert("Por favor ingresa origen y destino");
+            // Delimitación geográfica exacta para Cúcuta, Colombia
+            const restriccionCucuta = {
+                north: 8.05,
+                south: 7.75,
+                east: -72.40,
+                west: -72.65
+            };
+
+            // Autocompletado Origen
+            const autocompleteOrigen = document.createElement('gmp-place-autocomplete');
+            autocompleteOrigen.setAttribute('placeholder', '¿Dónde estás? (Punto A)');
+            autocompleteOrigen.includedRegionCodes = ['co'];
+            autocompleteOrigen.locationRestriction = restriccionCucuta;
+            document.getElementById('contenedor-origen').appendChild(autocompleteOrigen);
+
+            autocompleteOrigen.addEventListener('gmp-select', async ({ detail: { place } }) => {
+                await place.fetchFields({ fields: ['geometry', 'formattedAddress'] });
+                if (place.geometry && place.geometry.location) {
+                    coordenadaOrigen = place.geometry.location;
+                }
+            });
+
+            // Autocompletado Destino
+            const autocompleteDestino = document.createElement('gmp-place-autocomplete');
+            autocompleteDestino.setAttribute('placeholder', '¿A dónde vas? (Punto B)');
+            autocompleteDestino.includedRegionCodes = ['co'];
+            autocompleteDestino.locationRestriction = restriccionCucuta;
+            document.getElementById('contenedor-destino').appendChild(autocompleteDestino);
+
+            autocompleteDestino.addEventListener('gmp-select', async ({ detail: { place } }) => {
+                await place.fetchFields({ fields: ['geometry', 'formattedAddress'] });
+                if (place.geometry && place.geometry.location) {
+                    coordenadaDestino = place.geometry.location;
+                }
+            });
+
+            document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
+                if (!coordenadaOrigen || !coordenadaDestino) {
+                    alert("Por favor, selecciona un Origen y un Destino válidos de la lista desplegable.");
                     return;
                 }
-
-                trazarRutaTexto(origenTexto, destinoTexto);
+                trazarRutaConMarcadores(coordenadaOrigen, coordenadaDestino);
             });
         }
 
-        function trazarRutaTexto(origen, destino) {
+        function trazarRutaConMarcadores(origen, destino) {
             const request = {
                 origin: origen,
                 destination: destino,
@@ -243,19 +257,17 @@
                     directionsRenderer.setDirections(result);
 
                     const leg = result.routes[0].legs[0];
-                    crearMarcador(leg.start_location, iconOrigen, "Punto de Partida (A)");
-                    crearMarcador(leg.end_location, iconDestino, "Destino Final (B)");
+                    
+                    crearMarcador(leg.start_location, iconOrigen, "Punto A");
+                    crearMarcador(leg.end_location, iconDestino, "Punto B");
 
                     const pasoMedio = leg.steps[Math.floor(leg.steps.length / 2)].start_location;
                     crearMarcador(pasoMedio, iconBuseta, "Buseta en ruta");
                 } else {
-                    alert("No se pudo encontrar la ruta: " + status);
+                    alert("No se pudo calcular la ruta. Verifica tu conexión.");
                 }
             });
         }
     </script>
-    
-    <!-- Script de carga de Google Maps -->
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&callback=iniciarMapa"></script>
 </body>
 </html>
