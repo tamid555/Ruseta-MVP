@@ -3,10 +3,10 @@ USE ruseta_db;
 
 CREATE TABLE IF NOT EXISTS usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
-    email VARCHAR(100) NULL UNIQUE,      -- Es NULL si entra como invitado
+    nombre VARCHAR(30) NOT NULL,
+    email VARCHAR(50) NULL UNIQUE,      -- Es NULL si entra como invitado
     password_hash VARCHAR(255) NULL,     -- bcrypt genera 60 caracteres, por eso 255
-    es_invitado BOOLEAN DEFAULT FALSE,   -- Identifica si es un usuario temporal
+    es_invitado BOOLEAN DEFAULT FALSE,
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

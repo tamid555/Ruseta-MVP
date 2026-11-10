@@ -6,42 +6,20 @@
     <title>Ruseta - Mapa de Rutas</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background-color: #0b1d3a; }
+        body { background-color: #0b1d3a; font-family: sans-serif; }
 
-        .panel-rutas {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 10;
-            background-color: #142850;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            border: 1px solid #27496d;
-        }
-
-        #selector-ruta {
-            background-color: rgba(11, 29, 58, 0.9);
-            color: #ffffff;
-            border: 2px solid #00d2ff;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 1rem;
-            outline: none;
-            cursor: pointer;
-            width: 250px;
-        }
-        
+        /* Contenedor principal del mapa ocupando toda la pantalla */
         #mapa-cucuta {
             height: 100vh;
             width: 100%;
         }
 
+        /* Botón de Cerrar Sesión fijo arriba a la izquierda */
         .btn-volver {
             position: absolute;
             top: 20px;
             left: 20px;
-            z-index: 10;
+            z-index: 20;
             padding: 10px 20px;
             background-color: #00d2ff;
             color: #1d3c6f;
@@ -51,35 +29,156 @@
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
+
+        /* Panel de búsqueda (Planifica tu viaje) ubicado debajo del botón */
+        .panel-busqueda {
+            position: absolute;
+            top: 75px; 
+            left: 20px;
+            z-index: 10;
+            background-color: rgba(11, 29, 58, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            width: 320px;
+            border: 1px solid #00d2ff;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.6);
+        }
+
+        .panel-titulo {
+            color: white;
+            font-size: 16px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .input-grupo {
+            display: flex;
+            align-items: center;
+            background-color: #17263c;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 12px;
+            border: 1px solid #242f3e;
+        }
+
+        .input-grupo:focus-within {
+            border-color: #00d2ff;
+        }
+
+        .input-grupo input {
+            background: transparent;
+            border: none;
+            color: white;
+            width: 100%;
+            outline: none;
+            margin-left: 10px;
+            font-size: 14px;
+        }
+
+        .input-grupo input::placeholder {
+            color: #8892b0;
+        }
+
+        .icono-punto {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .punto-a { background-color: #00d2ff; }
+        .punto-b { background-color: #ff4757; }
+
+        .btn-buscar {
+            width: 100%;
+            padding: 12px;
+            background-color: #00d2ff;
+            color: #0b1d3a;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
+        .btn-buscar:hover {
+            background-color: #00a8cc;
+        }
     </style>
 </head>
 <body>
 
-    <!-- Botón de volver / cerrar sesión -->
-<button class="btn-volver" onclick="cerrarSesion()">Cerrar Sesión</button>    
-    <!-- Panel flotante para seleccionar la ruta -->
-    <div class="panel-rutas">
-        <select id="selector-ruta">
-            <option value="">Selecciona una ruta para dibujar...</option>
-        </select>
+    <!-- Botón de cerrar sesión -->
+    <button class="btn-volver" onclick="cerrarSesion()">Cerrar Sesión</button>    
+    
+    <!-- Panel flotante de búsqueda -->
+    <div class="panel-busqueda">
+        <h3 class="panel-titulo">Planifica tu viaje</h3>
+        
+        <div class="input-grupo">
+            <div class="icono-punto punto-a"></div>
+            <input type="text" id="buscador-origen" placeholder="¿Dónde estás? (Punto A)">
+        </div>
+
+        <div class="input-grupo">
+            <div class="icono-punto punto-b"></div>
+            <input type="text" id="buscador-destino" placeholder="¿A dónde vas? (Punto B)">
+        </div>
+
+        <button id="btn-buscar-ruta" class="btn-buscar">Trazar Ruta</button>
     </div>
 
     <!-- Contenedor del mapa -->
     <div id="mapa-cucuta"></div>    
 
     <script>
+        // Verificación de sesión
         if (!sessionStorage.getItem('usuarioRuseta')) {
-    window.location.href = 'index.html';
-}
+            window.location.href = 'index.html';
+        }
 
-function cerrarSesion() {
-    sessionStorage.removeItem('usuarioRuseta');
-    window.location.href = 'index.html';
-}
+        function cerrarSesion() {
+            sessionStorage.removeItem('usuarioRuseta');
+            window.location.href = 'index.html';
+        }
+
         let mapa;
         let directionsService;
         let directionsRenderer;
-        let rutasGlobales = [];
+
+        // Definición de los 4 Íconos Personalizados
+        const iconOrigen = {
+            url: 'assets/icons/origen.svg',
+            scaledSize: new google.maps.Size(40, 40),
+            anchor: new google.maps.Point(20, 40)
+        };
+
+        const iconDestino = {
+            url: 'assets/icons/destino.svg',
+            scaledSize: new google.maps.Size(40, 40),
+            anchor: new google.maps.Point(20, 40)
+        };
+
+        const iconBuseta = {
+            url: 'assets/icons/bus.svg',
+            scaledSize: new google.maps.Size(35, 35),
+            anchor: new google.maps.Point(17, 17)
+        };
+
+        const iconPOI = {
+            url: 'assets/icons/poi.svg',
+            scaledSize: new google.maps.Size(30, 30),
+            anchor: new google.maps.Point(15, 30)
+        };
+
+        function crearMarcador(posicion, icono, titulo) {
+            return new google.maps.Marker({
+                position: posicion,
+                map: mapa,
+                icon: icono,
+                title: titulo,
+                animation: google.maps.Animation.DROP
+            });
+        }
 
         function iniciarMapa() {
             const cucuta = { lat: 7.89391, lng: -72.50782 };
@@ -89,84 +188,50 @@ function cerrarSesion() {
                 center: cucuta,
                 disableDefaultUI: true,
                 styles: [
-    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-    { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#2b3648" }] },
-    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
-    { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
-    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
-    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
-    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
-    { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
-    { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-]
+                    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+                    { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#2b3648" }] },
+                    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+                    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+                    { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+                    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+                    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+                    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
+                    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
+                    { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
+                    { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
+                ]
             };
 
             mapa = new google.maps.Map(document.getElementById("mapa-cucuta"), opcionesMapa);
 
             directionsService = new google.maps.DirectionsService();
             directionsRenderer = new google.maps.DirectionsRenderer({
-            map: mapa,
-            suppressMarkers: false,
-            polylineOptions: {
-                strokeColor: '#a6e4ff', // Azul muy claro (Hielo / Celeste luminoso)
-                strokeWeight: 6,        // Aumentamos el grosor un punto para que destaque más
-                strokeOpacity: 0.9      // Ligera transparencia para que se vea moderno
-            }
-        });
-
-            obtenerYTrazarRutas();
-        }
-
-        async function obtenerYTrazarRutas() {
-            try {
-                console.log("Conectando con el backend de Python...");
-                const respuesta = await fetch('http://127.0.0.1:8000/api/rutas');
-                const datos = await respuesta.json();
-                console.log("Datos recibidos del servidor:", datos);
-
-                if (datos.estado === "exito" && datos.rutas.length > 0) {
-                    rutasGlobales = datos.rutas;
-                    const selector = document.getElementById("selector-ruta");
-
-                    // Limpiamos opciones previas para evitar duplicados
-                    selector.innerHTML = '<option value="">Selecciona una ruta para dibujar...</option>';
-
-                    // Llenamos el menú dinámicamente con las rutas de MySQL
-                    rutasGlobales.forEach(ruta => {
-                        let opcion = document.createElement("option");
-                        opcion.value = ruta.id;
-                        opcion.text = ruta.nombre;
-                        selector.appendChild(opcion);
-                    });
-
-                    // Evento al seleccionar una opción del menú desplegable
-                    selector.onchange = function(evento) {
-                        const idSeleccionado = evento.target.value;
-                        if (!idSeleccionado) return;
-
-                        const rutaSeleccionada = rutasGlobales.find(r => r.id == idSeleccionado);
-                        
-                        if (rutaSeleccionada && rutaSeleccionada.origen && rutaSeleccionada.destino) {
-                            console.log("Dibujando ruta:", rutaSeleccionada.nombre);
-                            trazarRutaEnMapa(rutaSeleccionada.origen, rutaSeleccionada.destino);
-                        } else {
-                            console.error("La ruta seleccionada no tiene coordenadas válidas de origen/destino.");
-                        }
-                    };
-
-                } else {
-                    console.warn("La base de datos no devolvió ninguna ruta registrada o está vacía.");
+                map: mapa,
+                suppressMarkers: true,
+                polylineOptions: {
+                    strokeColor: '#00d2ff',
+                    strokeWeight: 6,
+                    strokeOpacity: 0.9
                 }
-            } catch (error) {
-                console.error("Error crítico conectando con el backend de Python:", error);
-            }
+            });
+
+            // Evento para el botón de Trazar Ruta manual usando los inputs
+            document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
+                const origenTexto = document.getElementById('buscador-origen').value;
+                const destinoTexto = document.getElementById('buscador-destino').value;
+
+                if (!origenTexto || !destinoTexto) {
+                    alert("Por favor ingresa origen y destino");
+                    return;
+                }
+
+                trazarRutaTexto(origenTexto, destinoTexto);
+            });
         }
 
-        function trazarRutaEnMapa(origen, destino) {
+        function trazarRutaTexto(origen, destino) {
             const request = {
                 origin: origen,
                 destination: destino,
@@ -176,13 +241,21 @@ function cerrarSesion() {
             directionsService.route(request, (result, status) => {
                 if (status === 'OK') {
                     directionsRenderer.setDirections(result);
+
+                    const leg = result.routes[0].legs[0];
+                    crearMarcador(leg.start_location, iconOrigen, "Punto de Partida (A)");
+                    crearMarcador(leg.end_location, iconDestino, "Destino Final (B)");
+
+                    const pasoMedio = leg.steps[Math.floor(leg.steps.length / 2)].start_location;
+                    crearMarcador(pasoMedio, iconBuseta, "Buseta en ruta");
                 } else {
-                    console.error("Google Directions falló con el estado:", status);
+                    alert("No se pudo encontrar la ruta: " + status);
                 }
             });
         }
     </script>
-
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&callback=iniciarMapa" async defer></script>
+    
+    <!-- Script de carga de Google Maps -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&callback=iniciarMapa"></script>
 </body>
 </html>

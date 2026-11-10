@@ -1,7 +1,7 @@
 import math
 
 def distanciaMetros(lat1, lng1, lat2, lng2):
-    """Distancia en metros entre dos coordenadas (fórmula de Haversine)."""
+    """Distancia en metros entre dos coordenadas (formula de Haversine)."""
     radioTierra = 6371000
     fi1 = math.radians(lat1)
     fi2 = math.radians(lat2)

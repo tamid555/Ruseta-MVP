@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => loginBox.classList.remove('shake'), 400);
     }
 
-    // 1. Iniciar sesión (ahora consulta al backend)
+    // 1. Iniciar sesión (consulta al backend)
     loginBtn.addEventListener('click', async () => {
         const email = emailInput.value.trim();
         const password = passwordInput.value.trim();
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') loginBtn.click();
     });
 
-    // 2. Invitado (un solo listener, sin anidar)
+    // 2. Invitado
     guestBtn.addEventListener('click', () => {
         sessionStorage.setItem('usuarioRuseta', JSON.stringify({ nombre: 'Invitado', esInvitado: true }));
         loginBox.style.transition = 'all 0.4s ease';
