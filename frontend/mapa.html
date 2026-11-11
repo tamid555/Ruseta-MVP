@@ -134,22 +134,10 @@
         
         let coordenadaOrigen = null;
         let coordenadaDestino = null;
+        
+        
 
-        const iconOrigen = {
-            url: 'assets/icons/origen.svg',
-            scaledSize: new google.maps.Size(40, 40),
-            anchor: new google.maps.Point(20, 40)
-        };
-        const iconDestino = {
-            url: 'assets/icons/destino.svg',
-            scaledSize: new google.maps.Size(40, 40),
-            anchor: new google.maps.Point(20, 40)
-        };
-        const iconBuseta = {
-            url: 'assets/icons/bus.svg',
-            scaledSize: new google.maps.Size(35, 35),
-            anchor: new google.maps.Point(17, 17)
-        };
+        let iconOrigen, iconDestino, iconBuseta;
 
         function crearMarcador(posicion, icono, titulo) {
             return new google.maps.Marker({
@@ -186,6 +174,22 @@
             };
 
             mapa = new google.maps.Map(document.getElementById("mapa-cucuta"), opcionesMapa);
+            iconOrigen = {
+    url: 'assets/icons/origen.svg',
+    scaledSize: new google.maps.Size(40, 40),
+    anchor: new google.maps.Point(20, 40)
+};
+iconDestino = {
+    url: 'assets/icons/destino.svg',
+    scaledSize: new google.maps.Size(40, 40),
+    anchor: new google.maps.Point(20, 40)
+};
+iconBuseta = {
+    url: 'assets/icons/bus.svg',
+    scaledSize: new google.maps.Size(35, 35),
+    anchor: new google.maps.Point(17, 17)
+};
+
 
             directionsService = new google.maps.DirectionsService();
             directionsRenderer = new google.maps.DirectionsRenderer({
@@ -207,20 +211,12 @@
                 east: -72.40,
                 west: -72.65
             };
-
             // Autocompletado Origen
             const autocompleteOrigen = document.createElement('gmp-place-autocomplete');
             autocompleteOrigen.setAttribute('placeholder', '¿Dónde estás? (Punto A)');
             autocompleteOrigen.includedRegionCodes = ['co'];
             autocompleteOrigen.locationRestriction = restriccionCucuta;
             document.getElementById('contenedor-origen').appendChild(autocompleteOrigen);
-
-            autocompleteOrigen.addEventListener('gmp-select', async ({ detail: { place } }) => {
-                await place.fetchFields({ fields: ['geometry', 'formattedAddress'] });
-                if (place.geometry && place.geometry.location) {
-                    coordenadaOrigen = place.geometry.location;
-                }
-            });
 
             // Autocompletado Destino
             const autocompleteDestino = document.createElement('gmp-place-autocomplete');
@@ -229,45 +225,65 @@
             autocompleteDestino.locationRestriction = restriccionCucuta;
             document.getElementById('contenedor-destino').appendChild(autocompleteDestino);
 
-            autocompleteDestino.addEventListener('gmp-select', async ({ detail: { place } }) => {
-                await place.fetchFields({ fields: ['geometry', 'formattedAddress'] });
-                if (place.geometry && place.geometry.location) {
-                    coordenadaDestino = place.geometry.location;
-                }
-            });
+          autocompleteOrigen.addEventListener('gmp-select', async ({ placePrediction }) => {
+    try {
+        const place = placePrediction.toPlace();
+        await place.fetchFields({ fields: ['location', 'formattedAddress'] });
+        coordenadaOrigen = place.location;
+    } catch (e) {
+        console.error('Error al leer el origen:', e);
+    }
+});
+
+autocompleteDestino.addEventListener('gmp-select', async ({ placePrediction }) => {
+    try {
+        const place = placePrediction.toPlace();
+        await place.fetchFields({ fields: ['location', 'formattedAddress'] });
+        coordenadaDestino = place.location;
+    } catch (e) {
+        console.error('Error al leer el destino:', e);
+    }
+});
 
             document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
                 if (!coordenadaOrigen || !coordenadaDestino) {
                     alert("Por favor, selecciona un Origen y un Destino válidos de la lista desplegable.");
                     return;
                 }
-                trazarRutaConMarcadores(coordenadaOrigen, coordenadaDestino);
-            });
+            trazarLineaAB(coordenadaOrigen, coordenadaDestino);
+                    });
         }
 
-        function trazarRutaConMarcadores(origen, destino) {
-            const request = {
-                origin: origen,
-                destination: destino,
-                travelMode: 'DRIVING'
-            };
+let capas = [];   // todo lo que dibujamos, para borrarlo al trazar de nuevo
 
-            directionsService.route(request, (result, status) => {
-                if (status === 'OK') {
-                    directionsRenderer.setDirections(result);
+function limpiarCapas() {
+    capas.forEach(c => c.setMap(null));
+    capas = [];
+}
 
-                    const leg = result.routes[0].legs[0];
-                    
-                    crearMarcador(leg.start_location, iconOrigen, "Punto A");
-                    crearMarcador(leg.end_location, iconDestino, "Punto B");
+function trazarLineaAB(origen, destino) {
+    limpiarCapas();
 
-                    const pasoMedio = leg.steps[Math.floor(leg.steps.length / 2)].start_location;
-                    crearMarcador(pasoMedio, iconBuseta, "Buseta en ruta");
-                } else {
-                    alert("No se pudo calcular la ruta. Verifica tu conexión.");
-                }
-            });
-        }
+    const linea = new google.maps.Polyline({
+        path: [origen, destino],
+        map: mapa,
+        strokeOpacity: 0,              // la línea base es invisible y se dibuja con trazos
+        icons: [{
+            icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#ffffff', scale: 3 },
+            offset: '0',
+            repeat: '14px'
+        }]
+    });
+
+    capas.push(linea);
+    capas.push(crearMarcador(origen, iconOrigen, 'Punto A'));
+    capas.push(crearMarcador(destino, iconDestino, 'Punto B'));
+
+    const limites = new google.maps.LatLngBounds();
+    limites.extend(origen);
+    limites.extend(destino);
+    mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 }); // 400 = deja libre el panel
+}
     </script>
 </body>
 </html>
