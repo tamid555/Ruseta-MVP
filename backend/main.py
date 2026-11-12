@@ -2,12 +2,15 @@ import math
 import os
 import re
 import time
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
+import jwt
 import pymysql
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from utilidades import distanciaMetros
@@ -16,10 +19,10 @@ load_dotenv()
 
 app = FastAPI(title="Backend Ruseta - Cúcuta")
 
-# Solo permitimos el origen de Live Server (cambia el puerto si el tuyo es otro)
+# Aceptamos peticiones desde Live Server en cualquier puerto, pero solo desde este mismo computador
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5500", "http://localhost:5500"],
+    allow_origin_regex=r"http://(127\.0\.0\.1|localhost):\d+",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -27,6 +30,11 @@ app.add_middleware(
 RADIO_CAMINATA = 500          # metros máximos que el usuario camina hasta/desde la ruta
 PASO_METROS = 40              # distancia entre puntos guardados (la fija importar_osm.py)
 VELOCIDAD_SIMULADA = 12       # metros por segundo de las busetas simuladas (aprox. 43 km/h)
+
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("Falta JWT_SECRET en el archivo .env")
+HORAS_SESION = 8              # cuánto dura la sesión antes de pedir login otra vez
 
 
 def conectar_bd():
@@ -55,7 +63,49 @@ def estado_servidor():
     return {"mensaje": "Servidor de Ruseta en línea y esperando conexiones"}
 
 
+# ---------------------- SESIONES Y PERMISOS -----------------------
+
+esquemaBearer = HTTPBearer(auto_error=False)   # lee el encabezado "Authorization: Bearer <token>"
+
+
+def crearToken(idUsuario):
+    """Crea el 'carnet' firmado que el navegador manda en cada petición protegida."""
+    carga = {"sub": str(idUsuario), "exp": datetime.now(timezone.utc) + timedelta(hours=HORAS_SESION)}
+    return jwt.encode(carga, JWT_SECRET, algorithm="HS256")
+
+
+def usuarioActual(credenciales: HTTPAuthorizationCredentials | None = Depends(esquemaBearer)):
+    """Verifica el token y devuelve el usuario con su rol actual (leído de la base de datos)."""
+    if credenciales is None:
+        raise HTTPException(status_code=401, detail="Debes iniciar sesión")
+    try:
+        carga = jwt.decode(credenciales.credentials, JWT_SECRET, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Tu sesión expiró, inicia sesión de nuevo")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Sesión no válida")
+
+    conexion = conectar_bd()
+    try:
+        with conexion.cursor() as cursor:
+            cursor.execute("SELECT id, nombre, email, rol FROM usuarios WHERE id = %s", (int(carga["sub"]),))
+            usuario = cursor.fetchone()
+    finally:
+        conexion.close()
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Sesión no válida")
+    return usuario
+
+
+def soloAdmin(usuario=Depends(usuarioActual)):
+    """Deja pasar solo a los administradores."""
+    if usuario["rol"] != "admin":
+        raise HTTPException(status_code=403, detail="No tienes permiso para hacer esto")
+    return usuario
+
+
 # ---------------------------- USUARIOS ----------------------------
+
 PATRON_CORREO = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -69,6 +119,7 @@ def validarRegistro(datos):
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
     if len(datos.password.encode("utf-8")) > 72:   # bcrypt solo admite 72 bytes
         raise HTTPException(status_code=400, detail="La contraseña es demasiado larga")
+
 
 @app.post("/api/registro")
 def registrar_usuario(datos: DatosRegistro):
@@ -100,7 +151,7 @@ def iniciar_sesion(datos: DatosLogin):
     try:
         with conexion.cursor() as cursor:
             cursor.execute(
-                "SELECT id, nombre, password_hash FROM usuarios WHERE email = %s AND es_invitado = FALSE",
+                "SELECT id, nombre, rol, password_hash FROM usuarios WHERE email = %s AND es_invitado = FALSE",
                 (email,)
             )
             usuario = cursor.fetchone()
@@ -111,7 +162,35 @@ def iniciar_sesion(datos: DatosLogin):
     if not usuario or len(claveBytes) > 72 or not bcrypt.checkpw(claveBytes, usuario["password_hash"].encode("utf-8")):
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
 
-    return {"estado": "exito", "usuario": {"id": usuario["id"], "nombre": usuario["nombre"], "esInvitado": False}}
+    return {
+        "estado": "exito",
+        "token": crearToken(usuario["id"]),
+        "usuario": {"id": usuario["id"], "nombre": usuario["nombre"], "rol": usuario["rol"], "esInvitado": False},
+    }
+
+
+@app.get("/api/yo")
+def datos_de_mi_cuenta(usuario=Depends(usuarioActual)):
+    """Devuelve los datos del usuario que inició sesión (requiere token)."""
+    return {"estado": "exito", "usuario": {"id": usuario["id"], "nombre": usuario["nombre"],
+                                           "email": usuario["email"], "rol": usuario["rol"]}}
+
+
+@app.get("/api/admin/resumen")
+def resumen_para_admin(admin=Depends(soloAdmin)):
+    """Cifras generales del sistema (solo administradores)."""
+    conexion = conectar_bd()
+    try:
+        with conexion.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) AS total FROM usuarios WHERE es_invitado = FALSE")
+            usuarios = cursor.fetchone()["total"]
+            cursor.execute("SELECT COUNT(*) AS total FROM rutas")
+            rutas = cursor.fetchone()["total"]
+            cursor.execute("SELECT COUNT(*) AS total FROM ruta_puntos")
+            puntos = cursor.fetchone()["total"]
+    finally:
+        conexion.close()
+    return {"estado": "exito", "usuarios": usuarios, "rutas": rutas, "puntos": puntos}
 
 
 # ------------------------------ RUTAS -----------------------------
@@ -151,81 +230,3 @@ def puntoMasCercanoPorRuta(cursor, lat, lng, radio):
     deltaLat = radio / 111000
     deltaLng = radio / (111000 * math.cos(math.radians(lat)))
     # Primero filtramos con un cuadro en SQL (rápido) y luego medimos la distancia real
-    cursor.execute(
-        "SELECT ruta_id, orden, latitud, longitud FROM ruta_puntos "
-        "WHERE latitud BETWEEN %s AND %s AND longitud BETWEEN %s AND %s",
-        (lat - deltaLat, lat + deltaLat, lng - deltaLng, lng + deltaLng)
-    )
-    mejores = {}
-    for fila in cursor.fetchall():
-        puntoLat, puntoLng = float(fila["latitud"]), float(fila["longitud"])
-        distancia = distanciaMetros(lat, lng, puntoLat, puntoLng)
-        if distancia > radio:
-            continue
-        actual = mejores.get(fila["ruta_id"])
-        if actual is None or distancia < actual["distancia"]:
-            mejores[fila["ruta_id"]] = {"distancia": round(distancia), "orden": fila["orden"],
-                                        "lat": puntoLat, "lng": puntoLng}
-    return mejores
-
-
-@app.get("/api/buscar")
-def buscar_rutas(latA: float, lngA: float, latB: float, lngB: float, radio: int = RADIO_CAMINATA):
-    """Rutas que pasan cerca de A y de B, y que van de A hacia B (no al revés)."""
-    conexion = conectar_bd()
-    try:
-        with conexion.cursor() as cursor:
-            cercanosA = puntoMasCercanoPorRuta(cursor, latA, lngA, radio)
-            cercanosB = puntoMasCercanoPorRuta(cursor, latB, lngB, radio)
-            cursor.execute("SELECT id, nombre_ruta, ref FROM rutas")
-            nombres = {r["id"]: r for r in cursor.fetchall()}
-    finally:
-        conexion.close()
-
-    resultados = []
-    for rutaId, subida in cercanosA.items():
-        bajada = cercanosB.get(rutaId)
-        if bajada and subida["orden"] < bajada["orden"]:   # el orden decide el sentido
-            resultados.append({
-                "id": rutaId,
-                "nombre": nombres[rutaId]["nombre_ruta"],
-                "ref": nombres[rutaId]["ref"],
-                "subida": subida,
-                "bajada": bajada,
-                "caminataTotal": subida["distancia"] + bajada["distancia"],
-            })
-    resultados.sort(key=lambda r: r["caminataTotal"])
-    return {"estado": "exito", "resultados": resultados[:5]}
-
-
-# ------------------------ BUSETAS SIMULADAS -----------------------
-
-@app.get("/api/busetas-simuladas/{ruta_id}")
-def busetas_simuladas(ruta_id: int, ordenSubida: int = 0, cantidad: int = 3):
-    """Posiciones SIMULADAS de busetas sobre la ruta (no hay GPS real todavía)."""
-    conexion = conectar_bd()
-    try:
-        with conexion.cursor() as cursor:
-            cursor.execute(
-                "SELECT orden, latitud, longitud FROM ruta_puntos WHERE ruta_id = %s ORDER BY orden", (ruta_id,))
-            puntos = cursor.fetchall()
-    finally:
-        conexion.close()
-    if not puntos:
-        raise HTTPException(status_code=404, detail="Ruta sin puntos")
-
-    total = len(puntos)
-    avance = time.time() * VELOCIDAD_SIMULADA / PASO_METROS   # cuántos puntos ha avanzado en el tiempo
-    busetas = []
-    for i in range(cantidad):
-        indice = int(avance + i * total / cantidad) % total
-        metrosParaLlegar = ((ordenSubida - indice) % total) * PASO_METROS   # cuánto le falta para tu punto de subida
-        busetas.append({
-            "placa": f"SIM-{i + 1:02d}",
-            "lat": float(puntos[indice]["latitud"]),
-            "lng": float(puntos[indice]["longitud"]),
-            "metrosParaLlegar": metrosParaLlegar,
-            "minutos": round(metrosParaLlegar / VELOCIDAD_SIMULADA / 60, 1),
-        })
-    busetas.sort(key=lambda b: b["metrosParaLlegar"])
-    return {"estado": "exito", "simulado": True, "busetas": busetas}

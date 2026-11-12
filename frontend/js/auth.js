@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const passwordInput = document.getElementById('password');
     const msgError = document.getElementById('msgError');
 
+        // Si se cerró la sesión (ya no hay usuario), borra también el token que haya quedado guardado
+    if (!sessionStorage.getItem('usuarioRuseta')) {
+        sessionStorage.removeItem('tokenRuseta');
+    }
+    
     function mostrarError(texto) {
         msgError.textContent = texto;
         loginBox.classList.add('shake');
