@@ -40,7 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('usuarioRuseta', JSON.stringify(datos.usuario));
                 window.location.href = 'mapa.html';
             } else {
-                mostrarError(datos.detail || 'No se pudo iniciar sesión');
+                const mensaje = typeof datos.detail === 'string' ? datos.detail : 'No se pudo iniciar sesión';
+                mostrarError(mensaje);
+                passwordInput.value = '';
+                passwordInput.focus();
             }
         } catch (error) {
             mostrarError('No se pudo conectar con el servidor');

@@ -1,5 +1,6 @@
 import math
 import os
+import re
 import time
 
 import bcrypt
@@ -55,19 +56,35 @@ def estado_servidor():
 
 
 # ---------------------------- USUARIOS ----------------------------
+PATRON_CORREO = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def validarRegistro(datos):
+    """Revisa los datos del formulario de registro. Si algo está mal, responde 400 con un mensaje claro."""
+    if not datos.nombre.strip():
+        raise HTTPException(status_code=400, detail="Escribe tu nombre")
+    if not PATRON_CORREO.match(datos.email.strip()):
+        raise HTTPException(status_code=400, detail="Escribe un correo válido")
+    if len(datos.password) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+    if len(datos.password.encode("utf-8")) > 72:   # bcrypt solo admite 72 bytes
+        raise HTTPException(status_code=400, detail="La contraseña es demasiado larga")
 
 @app.post("/api/registro")
 def registrar_usuario(datos: DatosRegistro):
+    validarRegistro(datos)
+    nombre = datos.nombre.strip()
+    email = datos.email.strip().lower()
     hashClave = bcrypt.hashpw(datos.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     conexion = conectar_bd()
     try:
         with conexion.cursor() as cursor:
-            cursor.execute("SELECT id FROM usuarios WHERE email = %s", (datos.email,))
+            cursor.execute("SELECT id FROM usuarios WHERE email = %s", (email,))
             if cursor.fetchone():
                 raise HTTPException(status_code=409, detail="Ese correo ya está registrado")
             cursor.execute(
                 "INSERT INTO usuarios (nombre, email, password_hash, es_invitado) VALUES (%s, %s, %s, FALSE)",
-                (datos.nombre, datos.email, hashClave)
+                (nombre, email, hashClave)
             )
         conexion.commit()
         return {"estado": "exito", "mensaje": "Usuario creado"}
@@ -77,18 +94,21 @@ def registrar_usuario(datos: DatosRegistro):
 
 @app.post("/api/login")
 def iniciar_sesion(datos: DatosLogin):
+    email = datos.email.strip().lower()
+    claveBytes = datos.password.encode("utf-8")
     conexion = conectar_bd()
     try:
         with conexion.cursor() as cursor:
             cursor.execute(
                 "SELECT id, nombre, password_hash FROM usuarios WHERE email = %s AND es_invitado = FALSE",
-                (datos.email,)
+                (email,)
             )
             usuario = cursor.fetchone()
     finally:
         conexion.close()
 
-    if not usuario or not bcrypt.checkpw(datos.password.encode("utf-8"), usuario["password_hash"].encode("utf-8")):
+    # Mismo mensaje si el correo no existe o la contraseña es incorrecta (no revela qué correos hay registrados)
+    if not usuario or len(claveBytes) > 72 or not bcrypt.checkpw(claveBytes, usuario["password_hash"].encode("utf-8")):
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
 
     return {"estado": "exito", "usuario": {"id": usuario["id"], "nombre": usuario["nombre"], "esInvitado": False}}
