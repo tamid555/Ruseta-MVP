@@ -1,0 +1,79 @@
+-- ============================================================
+-- REGISTRO DE CAMBIOS DE LA BASE DE DATOS: ruseta_db
+-- ============================================================
+-- COMO USARLO
+--  * Computador nuevo (sin la base): ejecuta TODO este archivo, una sola vez,
+--    de arriba hacia abajo (en Workbench: pegar todo y pulsar el primer rayo).
+--  * Ya tienes la base: ejecuta SOLO los cambios que te falten (secciones 1, 2...).
+--    Un cambio ya aplicado NO se repite: los ALTER dan error si la columna ya existe.
+--  * REGLA: todo cambio se escribe aqui primero y despues se ejecuta en MySQL.
+-- ============================================================
+
+
+-- ---------- 0. BASE INICIAL (12/11/2026) ----------
+CREATE DATABASE IF NOT EXISTS ruseta_db;
+USE ruseta_db;
+
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NULL UNIQUE,      -- Es NULL si entra como invitado
+    password_hash VARCHAR(255) NULL,     -- bcrypt genera 60 caracteres, por eso 255
+    es_invitado BOOLEAN DEFAULT FALSE,   -- Identifica si es un usuario temporal
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS comunas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    numero_comuna INT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS rutas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre_ruta VARCHAR(100) NOT NULL,
+    osm_id BIGINT NULL UNIQUE,            -- Identificador de la ruta en OpenStreetMap
+    ref VARCHAR(20) NULL,                 -- Numero o codigo de la ruta
+    comuna_origen_id INT,
+    comuna_destino_id INT,
+    FOREIGN KEY (comuna_origen_id) REFERENCES comunas(id),
+    FOREIGN KEY (comuna_destino_id) REFERENCES comunas(id)
+);
+
+CREATE TABLE IF NOT EXISTS ruta_puntos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ruta_id INT NOT NULL,
+    orden INT NOT NULL,                   -- Posicion del punto dentro del recorrido
+    latitud DECIMAL(10, 8) NOT NULL,
+    longitud DECIMAL(11, 8) NOT NULL,
+    FOREIGN KEY (ruta_id) REFERENCES rutas(id) ON DELETE CASCADE,
+    INDEX idx_ruta_orden (ruta_id, orden)
+);
+
+CREATE TABLE IF NOT EXISTS busetas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    placa VARCHAR(20) NOT NULL UNIQUE,
+    ruta_id INT NOT NULL,
+    latitud DECIMAL(10, 8) NULL,          -- Coordenada GPS actual (Norte/Sur)
+    longitud DECIMAL(11, 8) NULL,         -- Coordenada GPS actual (Este/Oeste)
+    ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (ruta_id) REFERENCES rutas(id)
+);
+
+
+-- ---------- 1. [12/11/2026] Rol de usuario ----------
+ALTER TABLE usuarios ADD COLUMN rol ENUM('usuario', 'admin') NOT NULL DEFAULT 'usuario';
+-- Estado: aplicado en el computador de Tamid
+
+
+-- ============================================================
+-- CONSULTAS UTILES (no son cambios; se ejecutan de una en una)
+-- ============================================================
+-- Ver las cuentas guardadas:
+--   SELECT id, nombre, email, LEFT(password_hash, 20) AS inicio_del_hash, rol, fecha_registro FROM usuarios;
+-- Contar cuentas:
+--   SELECT COUNT(*) FROM usuarios;
+-- Volver admin a alguien (cada quien pone SU correo):
+--   UPDATE usuarios SET rol = 'admin' WHERE email = 'tu_correo@gmail.com';
+-- Borrar una cuenta (cambiar el 1 por el id):
+--   DELETE FROM usuarios WHERE id = 1;
