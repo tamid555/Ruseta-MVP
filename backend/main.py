@@ -40,6 +40,7 @@ HORAS_SESION = 8              # cuánto dura la sesión antes de pedir login otr
 def conectar_bd():
     return pymysql.connect(
         host=os.getenv("DB_HOST", "localhost"),
+        port=int(os.getenv("DB_PORT", "3306")),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
         database=os.getenv("DB_NAME"),
@@ -212,6 +213,7 @@ def obtener_rutas():
 def obtener_puntos_ruta(ruta_id: int):
     """Todos los puntos de UNA ruta, en orden, para dibujarla en el mapa."""
     conexion = conectar_bd()
+    
     try:
         with conexion.cursor() as cursor:
             cursor.execute(

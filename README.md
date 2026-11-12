@@ -16,5 +16,5 @@ App web para encontrar qué bus tomar en Cúcuta.
    (el JWT_SECRET se genera con: python -c "import secrets; print(secrets.token_hex(32))")
 4. En la carpeta backend: python -m pip install -r requirements.txt
 5. Cargar las rutas: python importar_osm.py datos/export.geojson
-6. Encender el servidor: uvicorn main:app --reload
+6. Encender el servidor: uvicorn main:app --reload (al terminar no olvide cerrarlo haciendo Ctrl + C en la Terminal)
 7. Abrir frontend/index.html con Live Server y crear una cuenta en registro.html.
