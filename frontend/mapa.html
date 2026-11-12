@@ -139,6 +139,7 @@
 </div>
 
 <div class="aviso-mapa" id="aviso-mapa"></div>
+
 <div id="mapa-cucuta"></div>
 
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&libraries=places&v=weekly&callback=iniciarMapa"></script>
@@ -371,7 +372,7 @@ document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
         alert('Elige un origen y un destino (escribiéndolos, desde el mapa o con tu ubicación).');
         return;
     }
-    trazarLineaAB(coordenadaOrigen, coordenadaDestino);
+    trazarRutaPorCalles(coordenadaOrigen, coordenadaDestino);
 });
 }
 
@@ -381,7 +382,42 @@ function limpiarCapas() {
     capas.forEach(c => c.setMap(null));
     capas = [];
 }
+async function trazarRutaPorCalles(origen, destino) {
+    limpiarCapas();
 
+    try {
+        const a = new google.maps.LatLng(origen);
+        const b = new google.maps.LatLng(destino);
+
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+            a.lng() + ',' + a.lat() + ';' + b.lng() + ',' + b.lat() +
+            '?overview=full&geometries=geojson';
+
+        const respuesta = await fetch(url);
+        const datos = await respuesta.json();
+        if (datos.code !== 'Ok' || !datos.routes.length) throw new Error(datos.code);
+
+        // OSRM entrega las coordenadas como [longitud, latitud]
+        const camino = datos.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+
+        capas.push(new google.maps.Polyline({
+            path: camino,
+            map: mapa,
+            strokeColor: '#ffffff',
+            strokeOpacity: 0.9,
+            strokeWeight: 5
+        }));
+
+        const limites = new google.maps.LatLngBounds();
+        camino.forEach(p => limites.extend(p));
+        mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
+
+    } catch (e) {
+        console.error('Ruta por calles falló:', e);
+        alert('No se pudo calcular la ruta por las calles. Se muestra la línea recta.');
+        trazarLineaAB(origen, destino);
+    }
+}
 function trazarLineaAB(origen, destino) {
     limpiarCapas();
 
