@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ruseta - Mapa de Rutas</title>
     <style>
+
         * {
             margin: 0;
             padding: 0;
@@ -99,22 +100,46 @@
         .btn-trazar:hover {
             opacity: 0.9;
         }
+        .fila-botones { display: flex; gap: 8px; margin-bottom: 6px; }
+.btn-mini {
+    flex: 1; padding: 7px 8px; background: #1e293b; color: #ffffff;
+    border: 1px solid #334155; border-radius: 8px; cursor: pointer; font-size: 0.8rem;
+}
+.btn-mini:hover { border-color: #00d2ff; }
+.texto-punto { color: #a6e4ff; font-size: 0.8rem; margin-bottom: 12px; word-break: break-word; }
+.aviso-mapa {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
+    background: rgba(15, 23, 42, 0.9); color: #ffffff; padding: 10px 18px;
+    border-radius: 8px; border: 1px solid #00d2ff; display: none;
+}
     </style>
+
 </head>
 <body>
 
     <button class="btn-cerrar-sesion" onclick="cerrarSesion()">Cerrar Sesión</button>
 
     <div class="panel-viaje">
-        <h3>Planifica tu viaje</h3>
-        
-        <div class="input-grupo" id="contenedor-origen"></div>
-        <div class="input-grupo" id="contenedor-destino"></div>
+    <h3>Planifica tu viaje</h3>
 
-        <button class="btn-trazar" id="btn-buscar-ruta">Trazar Ruta</button>
+    <div class="input-grupo" id="contenedor-origen"></div>
+    <div class="fila-botones">
+        <button class="btn-mini" id="btn-origen-mapa">📍 Elegir en el mapa</button>
+        <button class="btn-mini" id="btn-mi-ubicacion">🎯 Mi ubicación</button>
     </div>
+    <div class="texto-punto" id="texto-origen">Origen: sin seleccionar</div>
 
-    <div id="mapa-cucuta"></div>
+    <div class="input-grupo" id="contenedor-destino"></div>
+    <div class="fila-botones">
+        <button class="btn-mini" id="btn-destino-mapa">📍 Elegir en el mapa</button>
+    </div>
+    <div class="texto-punto" id="texto-destino">Destino: sin seleccionar</div>
+
+    <button class="btn-trazar" id="btn-buscar-ruta">Trazar Ruta</button>
+</div>
+
+<div class="aviso-mapa" id="aviso-mapa"></div>
+<div id="mapa-cucuta"></div>
 
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&libraries=places&v=weekly&callback=iniciarMapa"></script>
 
@@ -148,6 +173,91 @@
                 animation: google.maps.Animation.DROP
             });
         }
+let modoSeleccion = null;                       // 'origen' | 'destino' | null
+const marcadoresPunto = { origen: null, destino: null };
+let marcadorUsuario = null;
+let idSeguimiento = null;
+
+function textoCoordenadas(p) {
+    return p.lat().toFixed(5) + ', ' + p.lng().toFixed(5);
+}
+
+// Intenta obtener la dirección; si falla, muestra las coordenadas
+async function describirPunto(latLng) {
+    try {
+        const { results } = await new google.maps.Geocoder().geocode({ location: latLng });
+        if (results && results[0]) return results[0].formatted_address;
+    } catch (e) {
+        // Geocoding API no activada o sin resultados: se usan las coordenadas
+    }
+    return textoCoordenadas(latLng);
+}
+
+function fijarPunto(cual, latLng, texto) {
+    const esOrigen = cual === 'origen';
+    if (esOrigen) coordenadaOrigen = latLng; else coordenadaDestino = latLng;
+
+    if (marcadoresPunto[cual]) marcadoresPunto[cual].setMap(null);
+    marcadoresPunto[cual] = crearMarcador(
+        latLng, esOrigen ? iconOrigen : iconDestino, esOrigen ? 'Punto A' : 'Punto B'
+    );
+
+    document.getElementById('texto-' + cual).textContent =
+        (esOrigen ? 'Origen: ' : 'Destino: ') + (texto || textoCoordenadas(latLng));
+}
+
+function activarSeleccion(cual) {
+    modoSeleccion = cual;
+    mapa.setOptions({ draggableCursor: 'crosshair' });
+    const aviso = document.getElementById('aviso-mapa');
+    aviso.textContent = 'Haz clic en el mapa para elegir el ' + cual;
+    aviso.style.display = 'block';
+}
+
+function cancelarSeleccion() {
+    modoSeleccion = null;
+    mapa.setOptions({ draggableCursor: '' });
+    document.getElementById('aviso-mapa').style.display = 'none';
+}
+
+function usarMiUbicacion() {
+    if (!navigator.geolocation) {
+        alert('Tu navegador no permite obtener la ubicación.');
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            const punto = new google.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
+            fijarPunto('origen', punto, 'Mi ubicación actual');
+            mapa.panTo(punto);
+            mapa.setZoom(16);
+            seguirUsuario();
+        },
+        () => alert('No se pudo obtener tu ubicación. Revisa el permiso del navegador.'),
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+
+// Punto celeste que se mueve con el usuario (ubicación en tiempo real)
+function seguirUsuario() {
+    if (idSeguimiento !== null) return;
+    idSeguimiento = navigator.geolocation.watchPosition((pos) => {
+        const punto = new google.maps.LatLng(pos.coords.latitude, pos.coords.longitude);
+        if (!marcadorUsuario) {
+            marcadorUsuario = new google.maps.Marker({
+                position: punto, map: mapa, title: 'Tú', zIndex: 999,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE, scale: 8,
+                    fillColor: '#00d2ff', fillOpacity: 1,
+                    strokeColor: '#ffffff', strokeWeight: 3
+                }
+            });
+        } else {
+            marcadorUsuario.setPosition(punto);
+        }
+    }, () => {}, { enableHighAccuracy: true });
+}
+
 
         async function iniciarMapa() {
             const cucuta = { lat: 7.89391, lng: -72.50782 };
@@ -225,34 +335,45 @@ iconBuseta = {
             autocompleteDestino.locationRestriction = restriccionCucuta;
             document.getElementById('contenedor-destino').appendChild(autocompleteDestino);
 
-          autocompleteOrigen.addEventListener('gmp-select', async ({ placePrediction }) => {
+          
+            autocompleteOrigen.addEventListener('gmp-select', async ({ placePrediction }) => {
     try {
         const place = placePrediction.toPlace();
         await place.fetchFields({ fields: ['location', 'formattedAddress'] });
-        coordenadaOrigen = place.location;
-    } catch (e) {
-        console.error('Error al leer el origen:', e);
-    }
+        fijarPunto('origen', place.location, place.formattedAddress);
+    } catch (e) { console.error('Error al leer el origen:', e); }
 });
 
 autocompleteDestino.addEventListener('gmp-select', async ({ placePrediction }) => {
     try {
         const place = placePrediction.toPlace();
         await place.fetchFields({ fields: ['location', 'formattedAddress'] });
-        coordenadaDestino = place.location;
-    } catch (e) {
-        console.error('Error al leer el destino:', e);
-    }
+        fijarPunto('destino', place.location, place.formattedAddress);
+    } catch (e) { console.error('Error al leer el destino:', e); }
 });
 
-            document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
-                if (!coordenadaOrigen || !coordenadaDestino) {
-                    alert("Por favor, selecciona un Origen y un Destino válidos de la lista desplegable.");
-                    return;
-                }
-            trazarLineaAB(coordenadaOrigen, coordenadaDestino);
-                    });
-        }
+// Clic en el mapa (solo actúa si se activó "Elegir en el mapa")
+mapa.addListener('click', async (e) => {
+    if (!modoSeleccion) return;
+    if (e.placeId) e.stop();            // evita la ventanita de lugares de Google
+    const cual = modoSeleccion;
+    cancelarSeleccion();
+    const direccion = await describirPunto(e.latLng);
+    fijarPunto(cual, e.latLng, direccion);
+});
+
+document.getElementById('btn-origen-mapa').addEventListener('click', () => activarSeleccion('origen'));
+document.getElementById('btn-destino-mapa').addEventListener('click', () => activarSeleccion('destino'));
+document.getElementById('btn-mi-ubicacion').addEventListener('click', usarMiUbicacion);
+
+document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
+    if (!coordenadaOrigen || !coordenadaDestino) {
+        alert('Elige un origen y un destino (escribiéndolos, desde el mapa o con tu ubicación).');
+        return;
+    }
+    trazarLineaAB(coordenadaOrigen, coordenadaDestino);
+});
+}
 
 let capas = [];   // todo lo que dibujamos, para borrarlo al trazar de nuevo
 
@@ -264,25 +385,21 @@ function limpiarCapas() {
 function trazarLineaAB(origen, destino) {
     limpiarCapas();
 
-    const linea = new google.maps.Polyline({
+    capas.push(new google.maps.Polyline({
         path: [origen, destino],
         map: mapa,
-        strokeOpacity: 0,              // la línea base es invisible y se dibuja con trazos
+        strokeOpacity: 0,
         icons: [{
             icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#ffffff', scale: 3 },
             offset: '0',
             repeat: '14px'
         }]
-    });
-
-    capas.push(linea);
-    capas.push(crearMarcador(origen, iconOrigen, 'Punto A'));
-    capas.push(crearMarcador(destino, iconDestino, 'Punto B'));
+    }));
 
     const limites = new google.maps.LatLngBounds();
     limites.extend(origen);
     limites.extend(destino);
-    mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 }); // 400 = deja libre el panel
+    mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
 }
     </script>
 </body>
