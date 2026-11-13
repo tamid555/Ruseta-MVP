@@ -2,6 +2,22 @@ import json
 import math
 import os
 
+def fraccion_fuera_de_cucuta(feature):
+    g = feature.get('geometry', {})
+    if g.get('type') == 'LineString':
+        lineas = [g['coordinates']]
+    elif g.get('type') == 'MultiLineString':
+        lineas = g['coordinates']
+    else:
+        return 1.0
+    total = fuera = 0
+    for linea in lineas:
+        for lon, lat in linea:
+            total += 1
+            if longitud_total >= 3.0 and fraccion_fuera_de_cucuta(feature) <= 0.05:
+                fuera += 1
+    return fuera / total if total else 1.0
+
 # Fórmula de Haversine para medir la distancia real en kilómetros entre dos coordenadas
 def calcular_distancia(lat1, lon1, lat2, lon2):
     R = 6371.0  # Radio de la Tierra en km

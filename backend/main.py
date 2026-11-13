@@ -217,63 +217,103 @@ class SolicitudRuta(BaseModel):
     lat_destino: float
     lng_destino: float
 
+M_POR_MIN_CAMINANDO = 80      # ~4.8 km/h
+M_POR_MIN_BUSETA = 300        # ~18 km/h promedio en ciudad
+VIAJE_MINIMO_M = 300          # si el trayecto en buseta es menor, no vale la pena
+
+def rutas_cerca(cursor, punto):
+    """Ids de las rutas con algún punto dentro del radio de caminata (cuadro rápido en SQL)."""
+    lat, lng = punto
+    d_lat = RADIO_CAMINATA / 111000
+    d_lng = RADIO_CAMINATA / (111000 * math.cos(math.radians(lat)))
+    cursor.execute(
+        "SELECT DISTINCT ruta_id FROM ruta_puntos "
+        "WHERE latitud BETWEEN %s AND %s AND longitud BETWEEN %s AND %s",
+        (lat - d_lat, lat + d_lat, lng - d_lng, lng + d_lng))
+    return {fila["ruta_id"] for fila in cursor.fetchall()}
+
+def mejor_tramo(puntos, origen, destino):
+    """Mejor tramo (subida -> bajada) de UNA ruta, respetando el sentido del recorrido.
+    Minimiza el tiempo estimado: caminata al subir + viaje en buseta + caminata al bajar."""
+    n = len(puntos)
+    if n < 2:
+        return None
+    directa = distanciaMetros(origen[0], origen[1], destino[0], destino[1])
+    acumulada = [0.0] * n
+    for k in range(1, n):
+        acumulada[k] = acumulada[k - 1] + distanciaMetros(
+            puntos[k - 1][0], puntos[k - 1][1], puntos[k][0], puntos[k][1])
+
+    mejor_subida = None   # (valor, indice, metros_caminando)
+    resultado = None
+    for j in range(n):
+        lat, lng = puntos[j]
+
+        # ¿j sirve como punto de bajada? (la subida tiene que venir ANTES en el recorrido)
+        dist_destino = distanciaMetros(lat, lng, destino[0], destino[1])
+        if mejor_subida is not None and dist_destino <= RADIO_CAMINATA:
+            _, i, dist_origen = mejor_subida
+            viaje = acumulada[j] - acumulada[i]
+            # sirve solo si el viaje no es mínimo y caminar hasta/desde la buseta es menos que ir caminando directo
+            if viaje >= VIAJE_MINIMO_M and dist_origen + dist_destino < directa:
+                minutos = (dist_origen + dist_destino) / M_POR_MIN_CAMINANDO + viaje / M_POR_MIN_BUSETA
+                if resultado is None or minutos < resultado["minutos"]:
+                    resultado = {"i": i, "j": j, "caminata_origen": dist_origen,
+                                 "caminata_destino": dist_destino, "viaje": viaje, "minutos": minutos}
+
+        # ¿j sirve como punto de subida?
+        dist_origen = distanciaMetros(lat, lng, origen[0], origen[1])
+        if dist_origen <= RADIO_CAMINATA:
+            valor = dist_origen / M_POR_MIN_CAMINANDO - acumulada[j] / M_POR_MIN_BUSETA
+            if mejor_subida is None or valor < mejor_subida[0]:
+                mejor_subida = (valor, j, dist_origen)
+    return resultado
+
 @app.post("/api/buscar-ruta-buseta")
 def buscar_mejor_buseta(solicitud: SolicitudRuta):
-    """
-    Busca qué ruta de MySQL tiene puntos cerca al Origen Y al Destino.
-    """
+    origen = (solicitud.lat_origen, solicitud.lng_origen)
+    destino = (solicitud.lat_destino, solicitud.lng_destino)
+
     conexion = conectar_bd()
     try:
         with conexion.cursor() as cursor:
-            # 1. Buscar rutas que pasen cerca del ORIGEN (Cuadro delimitador rápido + Haversine)
-            deltaLat_O = RADIO_CAMINATA / 111000
-            deltaLng_O = RADIO_CAMINATA / (111000 * math.cos(math.radians(solicitud.lat_origen)))
-            
-            cursor.execute("""
-                SELECT DISTINCT ruta_id 
-                FROM ruta_puntos 
-                WHERE latitud BETWEEN %s AND %s 
-                  AND longitud BETWEEN %s AND %s
-            """, (solicitud.lat_origen - deltaLat_O, solicitud.lat_origen + deltaLat_O, 
-                  solicitud.lng_origen - deltaLng_O, solicitud.lng_origen + deltaLng_O))
-            
-            rutas_cerca_origen = {fila['ruta_id'] for fila in cursor.fetchall()}
+            candidatas = rutas_cerca(cursor, origen) & rutas_cerca(cursor, destino)
+            if not candidatas:
+                return {"encontrada": False, "mensaje": "Ninguna buseta pasa cerca de tu origen y de tu destino"}
 
-            # 2. Buscar rutas que pasen cerca del DESTINO
-            deltaLat_D = RADIO_CAMINATA / 111000
-            deltaLng_D = RADIO_CAMINATA / (111000 * math.cos(math.radians(solicitud.lat_destino)))
-            
-            cursor.execute("""
-                SELECT DISTINCT ruta_id 
-                FROM ruta_puntos 
-                WHERE latitud BETWEEN %s AND %s 
-                  AND longitud BETWEEN %s AND %s
-            """, (solicitud.lat_destino - deltaLat_D, solicitud.lat_destino + deltaLat_D, 
-                  solicitud.lng_destino - deltaLng_D, solicitud.lng_destino + deltaLng_D))
-            
-            rutas_cerca_destino = {fila['ruta_id'] for fila in cursor.fetchall()}
+            opciones = []
+            for ruta_id in candidatas:
+                cursor.execute(
+                    "SELECT latitud, longitud FROM ruta_puntos WHERE ruta_id = %s ORDER BY orden", (ruta_id,))
+                puntos = [(float(f["latitud"]), float(f["longitud"])) for f in cursor.fetchall()]
+                tramo = mejor_tramo(puntos, origen, destino)
+                if tramo:
+                    cursor.execute("SELECT nombre_ruta, ref FROM rutas WHERE id = %s", (ruta_id,))
+                    opciones.append((tramo, ruta_id, cursor.fetchone(), puntos))
 
-            # 3. Intersección: ¿Qué rutas cumplen ambas condiciones?
-            rutas_viables = rutas_cerca_origen.intersection(rutas_cerca_destino)
+            if not opciones:
+                return {"encontrada": False,
+                        "mensaje": "Hay busetas cerca, pero ninguna va de tu origen a tu destino en ese sentido"}
 
-            if not rutas_viables:
-                return {"encontrada": False, "mensaje": "Ninguna buseta hace este trayecto directo"}
-
-            # Tomar la primera ruta viable (podrías añadir lógica luego para elegir "la más rápida")
-            ruta_ganadora = list(rutas_viables)[0]
-
-            # 4. Traer el nombre y los puntos de la ruta ganadora para dibujarla
-            cursor.execute("SELECT nombre_ruta FROM rutas WHERE id = %s", (ruta_ganadora,))
-            info_ruta = cursor.fetchone()
-
-            cursor.execute("SELECT latitud, longitud FROM ruta_puntos WHERE ruta_id = %s ORDER BY orden", (ruta_ganadora,))
-            puntos = [{"lat": float(f["latitud"]), "lng": float(f["longitud"])} for f in cursor.fetchall()]
-
+            opciones.sort(key=lambda o: o[0]["minutos"])
+            tramo, ruta_id, info, puntos = opciones[0]
+            i, j = tramo["i"], tramo["j"]
             return {
                 "encontrada": True,
-                "nombre_ruta": info_ruta['nombre_ruta'],
-                "ruta_id": ruta_ganadora,
-                "puntos": puntos
+                "ruta_id": ruta_id,
+                "nombre_ruta": info["nombre_ruta"],
+                "ref": info["ref"],
+                "puntos": [{"lat": p[0], "lng": p[1]} for p in puntos[i:j + 1]],   # solo el tramo que se usa
+                "subida": {"lat": puntos[i][0], "lng": puntos[i][1]},
+                "bajada": {"lat": puntos[j][0], "lng": puntos[j][1]},
+                "caminata_origen_m": round(tramo["caminata_origen"]),
+                "caminata_destino_m": round(tramo["caminata_destino"]),
+                "viaje_m": round(tramo["viaje"]),
+                "minutos_estimados": round(tramo["minutos"]),
+                "alternativas": [
+                    {"nombre_ruta": o[2]["nombre_ruta"], "minutos_estimados": round(o[0]["minutos"])}
+                    for o in opciones[1:3]
+                ],
             }
     finally:
         conexion.close()

@@ -122,14 +122,14 @@
 
         <div class="input-grupo" id="contenedor-origen"></div>
         <div class="fila-botones">
-            <button class="btn-mini" id="btn-origen-mapa">📍 Elegir en el mapa</button>
-            <button class="btn-mini" id="btn-mi-ubicacion">🎯 Mi ubicación</button>
+            <button class="btn-mini" id="btn-origen-mapa"> Elegir en el mapa</button>
+            <button class="btn-mini" id="btn-mi-ubicacion">Usar mi ubicación</button>
         </div>
         <div class="texto-punto" id="texto-origen">Origen: sin seleccionar</div>
 
         <div class="input-grupo" id="contenedor-destino"></div>
         <div class="fila-botones">
-            <button class="btn-mini" id="btn-destino-mapa">📍 Elegir en el mapa</button>
+            <button class="btn-mini" id="btn-destino-mapa">Elegir en el mapa</button>
         </div>
         <div class="texto-punto" id="texto-destino">Destino: sin seleccionar</div>
 
@@ -432,9 +432,27 @@
             mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
         }
 
-        // --- AQUI AGREGAMOS LA CONEXION CON EL SERVIDOR PYTHON ---
+        // --- CONEXION CON EL SERVIDOR PYTHON (ruta de la buseta) ---
+
+        let capasBuseta = [];        // lo de la buseta va aparte para que no se borre con la ruta de referencia
+        let temporizadorAviso = null;
+
+        function limpiarBuseta() {
+            capasBuseta.forEach(c => c.setMap(null));
+            capasBuseta = [];
+        }
+
+        function mostrarAviso(texto, color) {
+            const aviso = document.getElementById('aviso-mapa');
+            aviso.textContent = texto;
+            aviso.style.borderColor = color || '#00d2ff';
+            aviso.style.display = 'block';
+            clearTimeout(temporizadorAviso);
+            temporizadorAviso = setTimeout(() => { aviso.style.display = 'none'; }, 8000);
+        }
 
         async function buscarBusetaBackend(origen, destino) {
+            limpiarBuseta();
             try {
                 const respuesta = await fetch('http://127.0.0.1:8000/api/buscar-ruta-buseta', {
                     method: 'POST',
@@ -446,40 +464,61 @@
                         lng_destino: destino.lng()
                     })
                 });
-                
+                if (!respuesta.ok) throw new Error('El servidor respondió ' + respuesta.status);
+
                 const datos = await respuesta.json();
-                
                 if (datos.encontrada) {
-                    dibujarBuseta(datos.puntos, datos.nombre_ruta);
+                    dibujarBuseta(datos, origen, destino);
                 } else {
-                    alert(datos.mensaje);
+                    mostrarAviso(datos.mensaje, '#ffd166');
                 }
             } catch (error) {
-                console.error("Error conectando con el backend:", error);
+                console.error('Error conectando con el backend:', error);
+                mostrarAviso('No se pudo consultar las busetas. Revisa que el servidor (uvicorn) esté encendido.', '#ff6b6b');
             }
         }
 
-        function dibujarBuseta(puntos, nombreRuta) {
-            const rutaBuseta = new google.maps.Polyline({
-                path: puntos,
-                map: mapa,
-                strokeColor: '#00d2ff', // Color celeste neón para resaltar
-                strokeOpacity: 1.0,
-                strokeWeight: 6,
-                zIndex: 999 
+        function dibujarBuseta(datos, origen, destino) {
+            // 1. Solo el tramo de la buseta: de donde subes a donde bajas
+            capasBuseta.push(new google.maps.Polyline({
+                path: datos.puntos, map: mapa,
+                strokeColor: '#00d2ff', strokeOpacity: 1, strokeWeight: 6, zIndex: 999
+            }));
+
+            // 2. Caminatas punteadas: origen -> subida y bajada -> destino
+            const punteada = (desde, hasta) => new google.maps.Polyline({
+                path: [desde, hasta], map: mapa, strokeOpacity: 0, zIndex: 998,
+                icons: [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#ffd166', scale: 3 },
+                    offset: '0', repeat: '12px'
+                }]
             });
-            
-            // Lo guardamos en 'capas' para que se borre si el usuario hace otra búsqueda
-            capas.push(rutaBuseta); 
-            
-            // Mostramos un aviso en pantalla
-            const aviso = document.getElementById('aviso-mapa');
-            aviso.textContent = '🚌 ¡Ruta sugerida: ' + nombreRuta + '!';
-            aviso.style.display = 'block';
-            aviso.style.borderColor = '#00d2ff';
-            
-            // Ocultar el aviso después de 6 segundos
-            setTimeout(() => { aviso.style.display = 'none'; }, 6000);
+            capasBuseta.push(punteada({ lat: origen.lat(), lng: origen.lng() }, datos.subida));
+            capasBuseta.push(punteada(datos.bajada, { lat: destino.lat(), lng: destino.lng() }));
+
+            // 3. Puntos de subida y bajada
+            const punto = (posicion, color, titulo) => new google.maps.Marker({
+                position: posicion, map: mapa, title: titulo, zIndex: 1000,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE, scale: 7,
+                    fillColor: color, fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2
+                }
+            });
+            capasBuseta.push(punto(datos.subida, '#00d2ff', 'Sube aquí'));
+            capasBuseta.push(punto(datos.bajada, '#ffd166', 'Baja aquí'));
+
+            // 4. Que se vea todo
+            const limites = new google.maps.LatLngBounds();
+            datos.puntos.forEach(p => limites.extend(p));
+            limites.extend(origen);
+            limites.extend(destino);
+            mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
+
+            // 5. Resumen
+            const nombre = datos.ref ? datos.ref + ' · ' + datos.nombre_ruta : datos.nombre_ruta;
+            mostrarAviso('🚌 ' + nombre + ': caminas ' + datos.caminata_origen_m + ' m, viajas ' +
+                (datos.viaje_m / 1000).toFixed(1) + ' km y caminas ' + datos.caminata_destino_m +
+                ' m (≈ ' + datos.minutos_estimados + ' min)', '#00d2ff');
         }
     </script>
 </body>
