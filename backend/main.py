@@ -217,23 +217,25 @@ class SolicitudRuta(BaseModel):
     lat_destino: float
     lng_destino: float
 
-M_POR_MIN_CAMINANDO = 80      # ~4.8 km/h
-M_POR_MIN_BUSETA = 300        # ~18 km/h promedio en ciudad
-VIAJE_MINIMO_M = 300          # si el trayecto en buseta es menor, no vale la pena
+M_POR_MIN_CAMINANDO = 80          # ~4.8 km/h
+M_POR_MIN_BUSETA = 300            # ~18 km/h promedio en ciudad
+VIAJE_MINIMO_M = 300              # si el trayecto en buseta es menor, no vale la pena
+RADIOS_CAMINATA = (500, 800, 1200)  # se prueba en orden: primero lo más cercano
+SENTIDO_ESTRICTO = False          # False: se acepta cada ruta en sus dos sentidos (ida y vuelta)
 
-def rutas_cerca(cursor, punto):
-    """Ids de las rutas con algún punto dentro del radio de caminata (cuadro rápido en SQL)."""
+def rutas_cerca(cursor, punto, radio):
+    """Ids de las rutas con algún punto dentro del radio (cuadro rápido en SQL)."""
     lat, lng = punto
-    d_lat = RADIO_CAMINATA / 111000
-    d_lng = RADIO_CAMINATA / (111000 * math.cos(math.radians(lat)))
+    d_lat = radio / 111000
+    d_lng = radio / (111000 * math.cos(math.radians(lat)))
     cursor.execute(
         "SELECT DISTINCT ruta_id FROM ruta_puntos "
         "WHERE latitud BETWEEN %s AND %s AND longitud BETWEEN %s AND %s",
         (lat - d_lat, lat + d_lat, lng - d_lng, lng + d_lng))
     return {fila["ruta_id"] for fila in cursor.fetchall()}
 
-def mejor_tramo(puntos, origen, destino):
-    """Mejor tramo (subida -> bajada) de UNA ruta, respetando el sentido del recorrido.
+def mejor_tramo(puntos, origen, destino, radio):
+    """Mejor tramo (subida -> bajada) de UNA ruta, en el orden en que está guardada.
     Minimiza el tiempo estimado: caminata al subir + viaje en buseta + caminata al bajar."""
     n = len(puntos)
     if n < 2:
@@ -251,10 +253,10 @@ def mejor_tramo(puntos, origen, destino):
 
         # ¿j sirve como punto de bajada? (la subida tiene que venir ANTES en el recorrido)
         dist_destino = distanciaMetros(lat, lng, destino[0], destino[1])
-        if mejor_subida is not None and dist_destino <= RADIO_CAMINATA:
+        if mejor_subida is not None and dist_destino <= radio:
             _, i, dist_origen = mejor_subida
             viaje = acumulada[j] - acumulada[i]
-            # sirve solo si el viaje no es mínimo y caminar hasta/desde la buseta es menos que ir caminando directo
+            # solo sirve si el viaje no es mínimo y caminar hasta/desde la buseta es menos que ir caminando directo
             if viaje >= VIAJE_MINIMO_M and dist_origen + dist_destino < directa:
                 minutos = (dist_origen + dist_destino) / M_POR_MIN_CAMINANDO + viaje / M_POR_MIN_BUSETA
                 if resultado is None or minutos < resultado["minutos"]:
@@ -263,7 +265,7 @@ def mejor_tramo(puntos, origen, destino):
 
         # ¿j sirve como punto de subida?
         dist_origen = distanciaMetros(lat, lng, origen[0], origen[1])
-        if dist_origen <= RADIO_CAMINATA:
+        if dist_origen <= radio:
             valor = dist_origen / M_POR_MIN_CAMINANDO - acumulada[j] / M_POR_MIN_BUSETA
             if mejor_subida is None or valor < mejor_subida[0]:
                 mejor_subida = (valor, j, dist_origen)
@@ -277,39 +279,53 @@ def buscar_mejor_buseta(solicitud: SolicitudRuta):
     conexion = conectar_bd()
     try:
         with conexion.cursor() as cursor:
-            candidatas = rutas_cerca(cursor, origen) & rutas_cerca(cursor, destino)
-            if not candidatas:
-                return {"encontrada": False, "mensaje": "Ninguna buseta pasa cerca de tu origen y de tu destino"}
-
             opciones = []
-            for ruta_id in candidatas:
-                cursor.execute(
-                    "SELECT latitud, longitud FROM ruta_puntos WHERE ruta_id = %s ORDER BY orden", (ruta_id,))
-                puntos = [(float(f["latitud"]), float(f["longitud"])) for f in cursor.fetchall()]
-                tramo = mejor_tramo(puntos, origen, destino)
-                if tramo:
-                    cursor.execute("SELECT nombre_ruta, ref FROM rutas WHERE id = %s", (ruta_id,))
-                    opciones.append((tramo, ruta_id, cursor.fetchone(), puntos))
+            radio_usado = None
+            for radio in RADIOS_CAMINATA:
+                candidatas = rutas_cerca(cursor, origen, radio) & rutas_cerca(cursor, destino, radio)
+                for ruta_id in candidatas:
+                    cursor.execute(
+                        "SELECT latitud, longitud FROM ruta_puntos WHERE ruta_id = %s ORDER BY orden", (ruta_id,))
+                    puntos = [(float(f["latitud"]), float(f["longitud"])) for f in cursor.fetchall()]
+
+                    # la ruta tal como está guardada y, si no es estricto, también al revés
+                    versiones = [(puntos, False)]
+                    if not SENTIDO_ESTRICTO:
+                        versiones.append((puntos[::-1], True))
+
+                    mejor = None
+                    for pts, invertido in versiones:
+                        tramo = mejor_tramo(pts, origen, destino, radio)
+                        if tramo and (mejor is None or tramo["minutos"] < mejor[0]["minutos"]):
+                            mejor = (tramo, pts, invertido)
+                    if mejor:
+                        cursor.execute("SELECT nombre_ruta, ref FROM rutas WHERE id = %s", (ruta_id,))
+                        opciones.append((mejor[0], ruta_id, cursor.fetchone(), mejor[1], mejor[2]))
+                if opciones:
+                    radio_usado = radio
+                    break
 
             if not opciones:
                 return {"encontrada": False,
-                        "mensaje": "Hay busetas cerca, pero ninguna va de tu origen a tu destino en ese sentido"}
+                        "mensaje": f"Ninguna buseta conecta tu origen y tu destino (se buscó hasta {RADIOS_CAMINATA[-1]} m a pie)"}
 
             opciones.sort(key=lambda o: o[0]["minutos"])
-            tramo, ruta_id, info, puntos = opciones[0]
+            tramo, ruta_id, info, puntos, invertido = opciones[0]
             i, j = tramo["i"], tramo["j"]
             return {
                 "encontrada": True,
                 "ruta_id": ruta_id,
                 "nombre_ruta": info["nombre_ruta"],
                 "ref": info["ref"],
-                "puntos": [{"lat": p[0], "lng": p[1]} for p in puntos[i:j + 1]],   # solo el tramo que se usa
+                "puntos": [{"lat": p[0], "lng": p[1]} for p in puntos[i:j + 1]],
                 "subida": {"lat": puntos[i][0], "lng": puntos[i][1]},
                 "bajada": {"lat": puntos[j][0], "lng": puntos[j][1]},
                 "caminata_origen_m": round(tramo["caminata_origen"]),
                 "caminata_destino_m": round(tramo["caminata_destino"]),
                 "viaje_m": round(tramo["viaje"]),
                 "minutos_estimados": round(tramo["minutos"]),
+                "radio_usado_m": radio_usado,
+                "sentido_por_confirmar": invertido,
                 "alternativas": [
                     {"nombre_ruta": o[2]["nombre_ruta"], "minutos_estimados": round(o[0]["minutos"])}
                     for o in opciones[1:3]

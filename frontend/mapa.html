@@ -111,6 +111,52 @@
             background: rgba(15, 23, 42, 0.9); color: #ffffff; padding: 10px 18px;
             border-radius: 8px; border: 1px solid #00d2ff; display: none;
         }
+        /* Caja de Leyenda de Rutas */
+       /* Caja de Leyenda de Rutas */
+        .leyenda-mapa {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 14px 18px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            color: #ffffff;
+            font-size: 0.82rem;
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+        }
+
+        .leyenda-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .linea-muestra {
+            width: 28px;
+            height: 4px;
+            border-radius: 2px;
+        }
+
+        .muestra-blanca {
+            background-color: #ffffff;
+            opacity: 0.9;
+        }
+
+        .muestra-azul {
+            background-color: #00d2ff;
+            box-shadow: 0 0 6px rgba(0, 210, 255, 0.6);
+        }
+
+        .muestra-amarilla {
+            height: 0;
+            border-top: 3px dotted #ffd166;
+        }
     </style>
 </head>
 <body>
@@ -137,7 +183,20 @@
     </div>
 
     <div class="aviso-mapa" id="aviso-mapa"></div>
-
+<div class="leyenda-mapa">
+        <div class="leyenda-item">
+            <span class="linea-muestra muestra-blanca"></span>
+            <span>Trayecto directo (Punto A a B)</span>
+        </div>
+        <div class="leyenda-item">
+            <span class="linea-muestra muestra-azul"></span>
+            <span>Recorrido de la buseta</span>
+        </div>
+        <div class="leyenda-item">
+            <span class="linea-muestra muestra-amarilla"></span>
+            <span>Caminata a pie</span>
+        </div>
+    </div>
     <div id="mapa-cucuta"></div>
 
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&libraries=places&v=weekly&callback=iniciarMapa"></script>
@@ -433,11 +492,18 @@
         }
 
         // --- CONEXION CON EL SERVIDOR PYTHON (ruta de la buseta) ---
+// --- CONEXION CON EL SERVIDOR PYTHON (ruta de la buseta) ---
 
-        let capasBuseta = [];        // lo de la buseta va aparte para que no se borre con la ruta de referencia
+        let capasBuseta = [];
         let temporizadorAviso = null;
+        let animacionBusetaId = null;
+        let controladorPeticion = null; // Evita peticiones duplicadas al hacer doble clic
 
         function limpiarBuseta() {
+            if (animacionBusetaId !== null) {
+                cancelAnimationFrame(animacionBusetaId);
+                animacionBusetaId = null;
+            }
             capasBuseta.forEach(c => c.setMap(null));
             capasBuseta = [];
         }
@@ -448,15 +514,21 @@
             aviso.style.borderColor = color || '#00d2ff';
             aviso.style.display = 'block';
             clearTimeout(temporizadorAviso);
-            temporizadorAviso = setTimeout(() => { aviso.style.display = 'none'; }, 8000);
+            // Notificación visible por 20 segundos
+            temporizadorAviso = setTimeout(() => { aviso.style.display = 'none'; }, 20000);
         }
 
         async function buscarBusetaBackend(origen, destino) {
+            // Si había una consulta en curso, la cancelamos para no dibujar dos busetas
+            if (controladorPeticion) controladorPeticion.abort();
+            controladorPeticion = new AbortController();
+
             limpiarBuseta();
             try {
                 const respuesta = await fetch('http://127.0.0.1:8000/api/buscar-ruta-buseta', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: controladorPeticion.signal,
                     body: JSON.stringify({
                         lat_origen: origen.lat(),
                         lng_origen: origen.lng(),
@@ -468,33 +540,103 @@
 
                 const datos = await respuesta.json();
                 if (datos.encontrada) {
+                    limpiarBuseta(); // Doble seguridad antes de pintar
                     dibujarBuseta(datos, origen, destino);
                 } else {
                     mostrarAviso(datos.mensaje, '#ffd166');
                 }
             } catch (error) {
+                if (error.name === 'AbortError') return; // Petición cancelada intencionalmente
                 console.error('Error conectando con el backend:', error);
                 mostrarAviso('No se pudo consultar las busetas. Revisa que el servidor (uvicorn) esté encendido.', '#ff6b6b');
             }
         }
 
-        function dibujarBuseta(datos, origen, destino) {
-            // 1. Solo el tramo de la buseta: de donde subes a donde bajas
+        function animarMarcadorEnRuta(marcador, puntos) {
+            if (puntos.length < 2) return;
+            let indice = 0;
+            let progreso = 0;
+            const velocidad = 0.035;
+
+            function paso() {
+                if (indice >= puntos.length - 1) {
+                    indice = 0;
+                    progreso = 0;
+                }
+
+                const p1 = puntos[indice];
+                const p2 = puntos[indice + 1];
+
+                const lat = p1.lat + (p2.lat - p1.lat) * progreso;
+                const lng = p1.lng + (p2.lng - p1.lng) * progreso;
+                marcador.setPosition({ lat, lng });
+
+                progreso += velocidad;
+                if (progreso >= 1) {
+                    progreso = 0;
+                    indice++;
+                }
+
+                animacionBusetaId = requestAnimationFrame(paso);
+            }
+            animacionBusetaId = requestAnimationFrame(paso);
+        }
+// Consulta OSRM para trazar la caminata siguiendo las calles y esquinas
+        async function obtenerCaminoPeatonal(desde, hasta) {
+            try {
+                const a = new google.maps.LatLng(desde);
+                const b = new google.maps.LatLng(hasta);
+                const url = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/' +
+                    a.lng() + ',' + a.lat() + ';' + b.lng() + ',' + b.lat() +
+                    '?overview=full&geometries=geojson';
+
+                const respuesta = await fetch(url);
+                const datos = await respuesta.json();
+                if (datos.code === 'Ok' && datos.routes.length) {
+                    return datos.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+                }
+            } catch (e) {
+                console.warn('No se pudo calcular caminata por calles, usando línea recta.');
+            }
+            return [desde, hasta]; // Si falla internet/OSRM, usa la línea directa como respaldo
+        }
+
+        async function dibujarBuseta(datos, origen, destino) {
+            // 1. Tramo de la buseta: de donde subes a donde bajas
             capasBuseta.push(new google.maps.Polyline({
                 path: datos.puntos, map: mapa,
                 strokeColor: '#00d2ff', strokeOpacity: 1, strokeWeight: 6, zIndex: 999
             }));
 
-            // 2. Caminatas punteadas: origen -> subida y bajada -> destino
-            const punteada = (desde, hasta) => new google.maps.Polyline({
-                path: [desde, hasta], map: mapa, strokeOpacity: 0, zIndex: 998,
+            // 2. Caminatas reales por las calles (punteado circular fino)
+            const coordOrigen = { lat: origen.lat(), lng: origen.lng() };
+            const coordDestino = { lat: destino.lat(), lng: destino.lng() };
+
+            const [caminoSubida, caminoBajada] = await Promise.all([
+                obtenerCaminoPeatonal(coordOrigen, datos.subida),
+                obtenerCaminoPeatonal(datos.bajada, coordDestino)
+            ]);
+
+            const crearLineaCaminata = (rutaPeatonal) => new google.maps.Polyline({
+                path: rutaPeatonal,
+                map: mapa,
+                strokeOpacity: 0,
+                zIndex: 998,
                 icons: [{
-                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#ffd166', scale: 3 },
-                    offset: '0', repeat: '12px'
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        fillColor: '#ffd166',
+                        fillOpacity: 1,
+                        strokeWeight: 0,
+                        scale: 2.2
+                    },
+                    offset: '0',
+                    repeat: '9px'
                 }]
             });
-            capasBuseta.push(punteada({ lat: origen.lat(), lng: origen.lng() }, datos.subida));
-            capasBuseta.push(punteada(datos.bajada, { lat: destino.lat(), lng: destino.lng() }));
+
+            capasBuseta.push(crearLineaCaminata(caminoSubida));
+            capasBuseta.push(crearLineaCaminata(caminoBajada));
 
             // 3. Puntos de subida y bajada
             const punto = (posicion, color, titulo) => new google.maps.Marker({
@@ -507,18 +649,32 @@
             capasBuseta.push(punto(datos.subida, '#00d2ff', 'Sube aquí'));
             capasBuseta.push(punto(datos.bajada, '#ffd166', 'Baja aquí'));
 
-            // 4. Que se vea todo
+            // 4. Icono único de la buseta recorriendo el tramo
+            const marcadorBus = new google.maps.Marker({
+                position: datos.subida,
+                map: mapa,
+                icon: iconBuseta,
+                title: datos.nombre_ruta,
+                zIndex: 1001
+            });
+            capasBuseta.push(marcadorBus);
+            animarMarcadorEnRuta(marcadorBus, datos.puntos);
+
+            // 5. Encuadre de cámara
             const limites = new google.maps.LatLngBounds();
             datos.puntos.forEach(p => limites.extend(p));
             limites.extend(origen);
             limites.extend(destino);
             mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
 
-            // 5. Resumen
+            // 6. Resumen en pantalla
+            let nota = '';
+            if (datos.radio_usado_m > 500) nota += ' · caminata larga';
+            if (datos.sentido_por_confirmar) nota += ' · sentido por confirmar';
             const nombre = datos.ref ? datos.ref + ' · ' + datos.nombre_ruta : datos.nombre_ruta;
             mostrarAviso('🚌 ' + nombre + ': caminas ' + datos.caminata_origen_m + ' m, viajas ' +
                 (datos.viaje_m / 1000).toFixed(1) + ' km y caminas ' + datos.caminata_destino_m +
-                ' m (≈ ' + datos.minutos_estimados + ' min)', '#00d2ff');
+                ' m (≈ ' + datos.minutos_estimados + ' min)' + nota, '#00d2ff');
         }
     </script>
 </body>
