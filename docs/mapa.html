@@ -536,7 +536,7 @@
 
             limpiarBuseta();
             try {
-                const respuesta = await fetch('http://127.0.0.1:8000/api/buscar-ruta-buseta', {
+                const respuesta = await fetch('https://ruseta-mvp.onrender.com/api/buscar-ruta-buseta',  {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     signal: controladorPeticion.signal,

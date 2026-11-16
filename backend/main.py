@@ -30,7 +30,8 @@ app = FastAPI(title="Backend Ruseta - Cúcuta")
 # Configuración estricta de CORS para desarrollo local
 origenes_permitidos = [
     "http://127.0.0.1:5500",
-    "http://localhost:5500"
+    "http://localhost:5500",
+    "https://tamid555.github.io",
 ]
 
 app.add_middleware(
