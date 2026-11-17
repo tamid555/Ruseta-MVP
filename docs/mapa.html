@@ -338,26 +338,26 @@
             };
 
             mapa = new google.maps.Map(document.getElementById("mapa-cucuta"), opcionesMapa);
-            iconOrigen = {
+        iconOrigen = {
                 url: 'assets/icons/origen.svg',
-                scaledSize: new google.maps.Size(40, 40),
-                anchor: new google.maps.Point(20, 40)
+                scaledSize: new google.maps.Size(52, 52),
+                anchor: new google.maps.Point(26, 44) // Punta exacta del pin escalado
             };
             iconDestino = {
                 url: 'assets/icons/destino.svg',
-                scaledSize: new google.maps.Size(40, 40),
-                anchor: new google.maps.Point(20, 40)
+                scaledSize: new google.maps.Size(52, 52),
+                anchor: new google.maps.Point(26, 44) // Punta exacta del pin escalado
             };
             iconBuseta = {
                 url: 'assets/icons/bus.svg',
-                scaledSize: new google.maps.Size(35, 35),
-                anchor: new google.maps.Point(17, 17)
+                scaledSize: new google.maps.Size(46, 46),
+                anchor: new google.maps.Point(23, 23) // Centro exacto del círculo
             };
             iconCaminata = {
-    url: 'assets/icons/caminata.svg',
-    scaledSize: new google.maps.Size(36, 36),
-    anchor: new google.maps.Point(18, 18)
-};
+                url: 'assets/icons/caminata.svg',
+                scaledSize: new google.maps.Size(46, 46),
+                anchor: new google.maps.Point(23, 23) // Centro exacto del círculo
+            };
 
             directionsService = new google.maps.DirectionsService();
             directionsRenderer = new google.maps.DirectionsRenderer({
