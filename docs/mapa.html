@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Ruseta - Mapa de Rutas</title>
     <style>
         * {
@@ -12,31 +12,105 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
+        :root { --ancho-barra: 360px; }
+
         body, html {
             width: 100%;
             height: 100%;
             overflow: hidden;
+            background: #0f172a;
         }
 
+        /* El mapa ocupa toda la pantalla; dvh evita problemas con la barra del navegador en el celular */
         #mapa-cucuta {
+            position: fixed;
+            inset: 0;
             width: 100%;
             height: 100%;
+            background: #242f3e;
         }
 
-        /* Botón de Cerrar Sesión */
+        /* ---------- Botón de 3 líneas (hamburguesa) ---------- */
+        .btn-menu {
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            z-index: 30;
+            width: 46px;
+            height: 46px;
+            border: none;
+            border-radius: 10px;
+            background: #00d2ff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+        }
+
+        .btn-menu span {
+            display: block;
+            width: 22px;
+            height: 3px;
+            border-radius: 2px;
+            background: #0f172a;
+            transition: transform 0.25s ease, opacity 0.25s ease;
+        }
+
+        /* Cuando el menú está abierto, las 3 líneas se convierten en una X */
+        body.menu-abierto .btn-menu span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+        body.menu-abierto .btn-menu span:nth-child(2) { opacity: 0; }
+        body.menu-abierto .btn-menu span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+        /* ---------- Barra lateral izquierda ---------- */
+        .barra-lateral {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 40px;               /* deja libre el logo de Google en la esquina inferior izquierda */
+            width: var(--ancho-barra);
+            max-width: 100vw;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            background: rgba(15, 23, 42, 0.96);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom-right-radius: 14px;
+            box-shadow: 8px 0 24px rgba(0, 0, 0, 0.4);
+            transform: translateX(-105%);
+            transition: transform 0.3s ease;
+        }
+
+        body.menu-abierto .barra-lateral { transform: none; }
+
+        .barra-cabecera {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            min-height: 74px;
+            padding: 14px 16px 14px 74px;   /* el espacio de la izquierda es para el botón de 3 líneas */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .logo-barra {
+            color: #00d2ff;
+            font-weight: 800;
+            letter-spacing: 3px;
+            font-size: 1.05rem;
+        }
+
         .btn-cerrar-sesion {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10;
             background-color: #00d2ff;
             color: #0f172a;
             border: none;
-            padding: 10px 20px;
+            padding: 8px 12px;
             font-weight: bold;
+            font-size: 0.8rem;
             border-radius: 8px;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
             transition: background 0.3s ease;
         }
 
@@ -45,31 +119,29 @@
             color: #ffffff;
         }
 
-        /* Panel Flotante de Planificación */
-        .panel-viaje {
-            position: absolute;
-            top: 80px;
-            left: 20px;
-            z-index: 10;
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(10px);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-            width: 340px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .barra-contenido {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
         }
 
-        .panel-viaje h3 {
+        .bloque {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        .bloque h3 {
             color: #ffffff;
-            text-align: center;
-            margin-bottom: 15px;
-            font-size: 1.1rem;
+            margin-bottom: 12px;
+            font-size: 1rem;
         }
 
         .input-grupo {
             position: relative;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         /* Adaptación visual para el componente web de Google */
@@ -85,7 +157,7 @@
 
         .btn-trazar {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             background: linear-gradient(135deg, #00d2ff, #3a86ff);
             border: none;
             border-radius: 8px;
@@ -93,110 +165,175 @@
             font-weight: bold;
             cursor: pointer;
             transition: opacity 0.3s;
-            margin-top: 5px;
+            margin-top: 4px;
         }
 
-        .btn-trazar:hover {
-            opacity: 0.9;
-        }
+        .btn-trazar:hover { opacity: 0.9; }
+
         .fila-botones { display: flex; gap: 8px; margin-bottom: 6px; }
+
         .btn-mini {
-            flex: 1; padding: 7px 8px; background: #1e293b; color: #ffffff;
-            border: 1px solid #334155; border-radius: 8px; cursor: pointer; font-size: 0.8rem;
-        }
-        .btn-mini:hover { border-color: #00d2ff; }
-        .texto-punto { color: #a6e4ff; font-size: 0.8rem; margin-bottom: 12px; word-break: break-word; }
-        .aviso-mapa {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
-            background: rgba(15, 23, 42, 0.9); color: #ffffff; padding: 10px 18px;
-            border-radius: 8px; border: 1px solid #00d2ff; display: none;
-        }
-        /* Caja de Leyenda de Rutas */
-       /* Caja de Leyenda de Rutas */
-        .leyenda-mapa {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 10;
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(10px);
-            padding: 14px 18px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            flex: 1;
+            min-height: 40px;
+            padding: 8px;
+            background: #1e293b;
             color: #ffffff;
-            font-size: 0.82rem;
-            display: flex;
-            flex-direction: column;
-            gap: 9px;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
         }
+
+        .btn-mini:hover { border-color: #00d2ff; }
+
+        .texto-punto {
+            color: #a6e4ff;
+            font-size: 0.8rem;
+            margin-bottom: 12px;
+            word-break: break-word;
+        }
+
+        /* Resumen del resultado (se queda fijo, no desaparece) */
+        .resumen {
+            color: #ffffff;
+            font-size: 0.88rem;
+            line-height: 1.4;
+            padding: 8px 10px;
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border-left: 3px solid #00d2ff;
+            border-radius: 6px;
+        }
+
+        /* Leyenda con casillas para mostrar u ocultar cada capa */
+        .leyenda { display: flex; flex-direction: column; gap: 10px; }
 
         .leyenda-item {
             display: flex;
             align-items: center;
             gap: 10px;
+            color: #ffffff;
+            font-size: 0.82rem;
+            cursor: pointer;
         }
 
-        .linea-muestra {
-            width: 28px;
-            height: 4px;
-            border-radius: 2px;
+        .leyenda-item input { accent-color: #00d2ff; width: 16px; height: 16px; flex-shrink: 0; }
+
+        .linea-muestra { width: 28px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+        .muestra-blanca { background-color: #ffffff; opacity: 0.6; }
+        .muestra-azul { background-color: #00d2ff; box-shadow: 0 0 6px rgba(0, 210, 255, 0.6); }
+        .muestra-amarilla { height: 0; border-top: 4px dotted #ffd166; }
+
+        /* ---------- Aviso temporal (se puede cerrar tocándolo) ---------- */
+        .aviso-mapa {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 15;
+            max-width: min(560px, calc(100vw - 100px));
+            background: rgba(15, 23, 42, 0.95);
+            color: #ffffff;
+            padding: 10px 18px;
+            border-radius: 8px;
+            border: 1px solid #00d2ff;
+            display: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            line-height: 1.35;
         }
 
-        .muestra-blanca {
-            background-color: #ffffff;
-            opacity: 0.9;
+        body.menu-abierto .aviso-mapa { left: calc(50% + (var(--ancho-barra) / 2)); }
+
+        /* Fondo oscuro detrás del menú (solo en el celular) */
+        .velo-menu {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 19;
+            background: rgba(0, 0, 0, 0.5);
         }
 
-        .muestra-azul {
-            background-color: #00d2ff;
-            box-shadow: 0 0 6px rgba(0, 210, 255, 0.6);
-        }
+        /* ---------- Celulares y pantallas pequeñas ---------- */
+        @media (max-width: 768px) {
+            .barra-lateral { width: min(88vw, 360px); }
+            body.menu-abierto .velo-menu { display: block; }
 
-        .muestra-amarilla {
-            height: 0;
-            border-top: 3px dotted #ffd166;
+            /* El aviso pasa abajo para no taparse con el botón de 3 líneas */
+            .aviso-mapa {
+                top: auto;
+                bottom: calc(18px + env(safe-area-inset-bottom));
+                max-width: calc(100vw - 32px);
+            }
+            body.menu-abierto .aviso-mapa { left: 50%; }
+
+            /* 16 px evita que el iPhone haga zoom al escribir en los campos */
+            gmp-place-autocomplete { font-size: 16px; }
+            .btn-mini { min-height: 44px; font-size: 0.85rem; }
+            .btn-trazar { padding: 14px; }
         }
     </style>
 </head>
 <body>
 
-    <button class="btn-cerrar-sesion" onclick="cerrarSesion()">Cerrar Sesión</button>
+    <button class="btn-menu" id="btn-menu" aria-label="Mostrar u ocultar el menú" aria-expanded="true" aria-controls="barra-lateral">
+        <span></span><span></span><span></span>
+    </button>
 
-    <div class="panel-viaje">
-        <h3>Planifica tu viaje</h3>
+    <aside class="barra-lateral" id="barra-lateral">
+        <div class="barra-cabecera">
+            <span class="logo-barra">RUSETA</span>
+            <button class="btn-cerrar-sesion" onclick="cerrarSesion()">Cerrar sesión</button>
+        </div>
 
-        <div class="input-grupo" id="contenedor-origen"></div>
-        <div class="fila-botones">
-            <button class="btn-mini" id="btn-origen-mapa"> Elegir en el mapa</button>
-            <button class="btn-mini" id="btn-mi-ubicacion">Usar mi ubicación</button>
-        </div>
-        <div class="texto-punto" id="texto-origen">Origen: sin seleccionar</div>
+        <div class="barra-contenido">
+            <section class="bloque">
+                <h3>Planifica tu viaje</h3>
 
-        <div class="input-grupo" id="contenedor-destino"></div>
-        <div class="fila-botones">
-            <button class="btn-mini" id="btn-destino-mapa">Elegir en el mapa</button>
-        </div>
-        <div class="texto-punto" id="texto-destino">Destino: sin seleccionar</div>
+                <div class="input-grupo" id="contenedor-origen"></div>
+                <div class="fila-botones">
+                    <button class="btn-mini" id="btn-origen-mapa">Elegir en el mapa</button>
+                    <button class="btn-mini" id="btn-mi-ubicacion">Usar mi ubicación</button>
+                </div>
+                <div class="texto-punto" id="texto-origen">Origen: sin seleccionar</div>
 
-        <button class="btn-trazar" id="btn-buscar-ruta">Trazar Ruta</button>
-    </div>
+                <div class="input-grupo" id="contenedor-destino"></div>
+                <div class="fila-botones">
+                    <button class="btn-mini" id="btn-destino-mapa">Elegir en el mapa</button>
+                </div>
+                <div class="texto-punto" id="texto-destino">Destino: sin seleccionar</div>
 
-    <div class="aviso-mapa" id="aviso-mapa"></div>
-<div class="leyenda-mapa">
-        <div class="leyenda-item">
-            <span class="linea-muestra muestra-blanca"></span>
-            <span id="leyenda-directa">Trayecto directo (Punto A a B)</span>
+                <button class="btn-trazar" id="btn-buscar-ruta">Trazar Ruta</button>
+            </section>
+
+            <section class="bloque">
+                <h3>Tu ruta</h3>
+                <p class="resumen" id="resumen-ruta">Elige un origen y un destino y pulsa «Trazar Ruta».</p>
+
+                <div class="leyenda">
+                    <label class="leyenda-item">
+                        <input type="checkbox" id="ver-directo" checked>
+                        <span class="linea-muestra muestra-blanca"></span>
+                        <span id="leyenda-directa">Trayecto directo (Punto A a B)</span>
+                    </label>
+                    <label class="leyenda-item">
+                        <input type="checkbox" id="ver-buseta" checked>
+                        <span class="linea-muestra muestra-azul"></span>
+                        <span id="leyenda-buseta">Recorrido de la buseta</span>
+                    </label>
+                    <label class="leyenda-item">
+                        <input type="checkbox" id="ver-caminata" checked>
+                        <span class="linea-muestra muestra-amarilla"></span>
+                        <span id="leyenda-caminata">Caminata a pie</span>
+                    </label>
+                </div>
+            </section>
         </div>
-        <div class="leyenda-item">
-            <span class="linea-muestra muestra-azul"></span>
-            <span id="leyenda-buseta">Recorrido de la buseta</span>
-        </div>
-        <div class="leyenda-item">
-            <span class="linea-muestra muestra-amarilla"></span>
-            <span id="leyenda-caminata">Caminata a pie</span>
-        </div>
-    </div>
+    </aside>
+
+    <div class="velo-menu" id="velo-menu"></div>
+    <div class="aviso-mapa" id="aviso-mapa" title="Toca para cerrar"></div>
+
     <div id="mapa-cucuta"></div>
 
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&libraries=places&v=weekly&callback=iniciarMapa"></script>
@@ -210,6 +347,57 @@
             sessionStorage.removeItem('usuarioRuseta');
             window.location.href = 'index.html';
         }
+
+        // ---------- Menú lateral (botón de 3 líneas) ----------
+        const ABRIR_MENU_EN_MOVIL = false;   // true: en el celular también empieza abierto
+        const esMovil = () => window.matchMedia('(max-width: 768px)').matches;
+
+        function abrirMenu(abrir) {
+            document.body.classList.toggle('menu-abierto', abrir);
+            document.getElementById('btn-menu').setAttribute('aria-expanded', String(abrir));
+            // El resumen ya se ve dentro del menú, así que se oculta el aviso (salvo el de "elige un punto en el mapa")
+            const aviso = document.getElementById('aviso-mapa');
+            if (abrir && !aviso.dataset.seleccion) aviso.style.display = 'none';
+        }
+
+        // Márgenes para que la ruta no quede tapada por el menú al encuadrar el mapa
+        function margenesMapa() {
+            if (esMovil()) return { top: 80, right: 30, bottom: 110, left: 30 };
+            const abierto = document.body.classList.contains('menu-abierto');
+            return { top: 60, right: 60, bottom: 60, left: abierto ? 420 : 80 };
+        }
+
+        // Casillas de la leyenda: mostrar u ocultar cada capa
+        const visibilidad = { directo: true, buseta: true, caminata: true };
+
+        function aplicarVisibilidad() {
+            capas.forEach(c => c.setMap(visibilidad.directo ? mapa : null));
+            capasBuseta.forEach(c => c.setMap(visibilidad.buseta ? mapa : null));
+            capasCaminata.forEach(c => c.setMap(visibilidad.caminata ? mapa : null));
+        }
+
+        function reiniciarLeyenda() {
+            document.getElementById('leyenda-directa').textContent = 'Trayecto directo (Punto A a B)';
+            document.getElementById('leyenda-buseta').textContent = 'Recorrido de la buseta';
+            document.getElementById('leyenda-caminata').textContent = 'Caminata a pie';
+            escribirResumen('Elige un origen y un destino y pulsa «Trazar Ruta».', '#00d2ff');
+        }
+
+        document.getElementById('btn-menu').addEventListener('click', () =>
+            abrirMenu(!document.body.classList.contains('menu-abierto')));
+        document.getElementById('velo-menu').addEventListener('click', () => abrirMenu(false));
+        document.getElementById('aviso-mapa').addEventListener('click', (e) => {
+            if (modoSeleccion === null) e.currentTarget.style.display = 'none';
+        });
+        ['directo', 'buseta', 'caminata'].forEach(clave => {
+            document.getElementById('ver-' + clave).addEventListener('change', (e) => {
+                visibilidad[clave] = e.target.checked;
+                aplicarVisibilidad();
+            });
+        });
+
+        // En computador empieza abierto; en celular, cerrado para ver el mapa
+        abrirMenu(!esMovil() || ABRIR_MENU_EN_MOVIL);
 
         let mapa;
         let directionsService;
@@ -263,15 +451,20 @@
 
         function activarSeleccion(cual) {
             modoSeleccion = cual;
+            if (esMovil()) abrirMenu(false);          // en el celular se cierra el menú para poder tocar el mapa
             mapa.setOptions({ draggableCursor: 'crosshair' });
+            clearTimeout(temporizadorAviso);
             const aviso = document.getElementById('aviso-mapa');
-            aviso.textContent = 'Haz clic en el mapa para elegir el ' + cual;
+            aviso.textContent = (esMovil() ? 'Toca el mapa' : 'Haz clic en el mapa') + ' para elegir el ' + cual;
+            aviso.style.borderColor = '#00d2ff';
+            aviso.dataset.seleccion = '1';
             aviso.style.display = 'block';
         }
 
         function cancelarSeleccion() {
             modoSeleccion = null;
             mapa.setOptions({ draggableCursor: '' });
+            delete document.getElementById('aviso-mapa').dataset.seleccion;
             document.getElementById('aviso-mapa').style.display = 'none';
         }
 
@@ -414,6 +607,7 @@
                 cancelarSeleccion();
                 const direccion = await describirPunto(e.latLng);
                 fijarPunto(cual, e.latLng, direccion);
+                if (esMovil()) abrirMenu(true);       // se vuelve a abrir el menú para ver el punto elegido
             });
 
             document.getElementById('btn-origen-mapa').addEventListener('click', () => activarSeleccion('origen'));
@@ -426,7 +620,9 @@
                     alert('Elige un origen y un destino (escribiéndolos, desde el mapa o con tu ubicación).');
                     return;
                 }
-                // Dibuja la línea blanca de caminata/auto
+                reiniciarLeyenda();
+                if (esMovil()) abrirMenu(false);       // en el celular se cierra el menú para ver el mapa
+                // Dibuja la línea blanca de referencia por las calles
                 trazarRutaPorCalles(coordenadaOrigen, coordenadaDestino);
                 
                 // Le pide a Python la buseta más cercana
@@ -439,10 +635,6 @@
         function limpiarCapas() {
             capas.forEach(c => c.setMap(null));
             capas = [];
-            // Reinicia los textos de la leyenda en cada búsqueda nueva
-            document.getElementById('leyenda-directa').textContent = 'Trayecto directo (Punto A a B)';
-            document.getElementById('leyenda-buseta').textContent = 'Recorrido de la buseta';
-            document.getElementById('leyenda-caminata').textContent = 'Caminata a pie';
         }
 
         async function trazarRutaPorCalles(origen, destino) {
@@ -466,8 +658,9 @@
                     path: camino,
                     map: mapa,
                     strokeColor: '#ffffff',
-                    strokeOpacity: 0.9,
-                    strokeWeight: 5
+                    strokeOpacity: 0.6,
+                    strokeWeight: 4,
+                    zIndex: 1
                 }));
 
                 // Muestra la distancia de la línea blanca en la leyenda
@@ -477,7 +670,8 @@
 
                 const limites = new google.maps.LatLngBounds();
                 camino.forEach(p => limites.extend(p));
-                mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
+                mapa.fitBounds(limites, margenesMapa());
+                aplicarVisibilidad();
 
             } catch (e) {
                 console.error('Ruta por calles falló:', e);
@@ -502,12 +696,14 @@
             const limites = new google.maps.LatLngBounds();
             limites.extend(origen);
             limites.extend(destino);
-            mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
+            mapa.fitBounds(limites, margenesMapa());
+                aplicarVisibilidad();
         }
 
         // --- CONEXION CON EL SERVIDOR PYTHON (ruta de la buseta) ---
 
         let capasBuseta = [];
+        let capasCaminata = [];
         let temporizadorAviso = null;
         let animacionBusetaId = null;
         let controladorPeticion = null;
@@ -519,6 +715,8 @@
             }
             capasBuseta.forEach(c => c.setMap(null));
             capasBuseta = [];
+            capasCaminata.forEach(c => c.setMap(null));
+            capasCaminata = [];
         }
 
         function mostrarAviso(texto, color) {
@@ -528,6 +726,18 @@
             aviso.style.display = 'block';
             clearTimeout(temporizadorAviso);
             temporizadorAviso = setTimeout(() => { aviso.style.display = 'none'; }, 20000);
+        }
+
+        // El resumen queda fijo en el menú; el aviso solo se muestra si el menú está cerrado
+        function escribirResumen(texto, color) {
+            const resumen = document.getElementById('resumen-ruta');
+            resumen.textContent = texto;
+            resumen.style.borderLeftColor = color || '#00d2ff';
+        }
+
+        function anunciar(texto, color) {
+            escribirResumen(texto, color);
+            if (!document.body.classList.contains('menu-abierto')) mostrarAviso(texto, color);
         }
 
         async function buscarBusetaBackend(origen, destino) {
@@ -554,12 +764,12 @@
                     limpiarBuseta();
                     dibujarBuseta(datos, origen, destino);
                 } else {
-                    mostrarAviso(datos.mensaje, '#ffd166');
+                    anunciar(datos.mensaje, '#ffd166');
                 }
             } catch (error) {
                 if (error.name === 'AbortError') return;
                 console.error('Error conectando con el backend:', error);
-                mostrarAviso('No se pudo consultar las busetas. Revisa que el servidor (uvicorn) esté encendido.', '#ff6b6b');
+                anunciar('No se pudo consultar las busetas. El servidor puede estar despertando: intenta de nuevo en unos segundos.', '#ff6b6b');
             }
         }
 
@@ -628,26 +838,28 @@
                 obtenerCaminoPeatonal(datos.bajada, coordDestino)
             ]);
 
-            const crearLineaCaminata = (rutaPeatonal) => new google.maps.Polyline({
-                path: rutaPeatonal,
-                map: mapa,
-                strokeOpacity: 0,
-                zIndex: 998,
-                icons: [{
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        fillColor: '#ffd166',
-                        fillOpacity: 1,
-                        strokeWeight: 0,
-                        scale: 2.2
-                    },
-                    offset: '0',
-                    repeat: '9px'
-                }]
-            });
+            // Cada caminata lleva un halo oscuro (se distingue de las otras líneas) y puntos amarillos redondos
+            const crearLineaCaminata = (rutaPeatonal) => [
+                new google.maps.Polyline({
+                    path: rutaPeatonal, map: mapa,
+                    strokeColor: '#0b1d3a', strokeOpacity: 0.55, strokeWeight: 7, zIndex: 997
+                }),
+                new google.maps.Polyline({
+                    path: rutaPeatonal, map: mapa, strokeOpacity: 0, zIndex: 998,
+                    icons: [{
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            fillColor: '#ffd166', fillOpacity: 1,
+                            strokeColor: '#0b1d3a', strokeOpacity: 1, strokeWeight: 1,
+                            scale: 2.6
+                        },
+                        offset: '0',
+                        repeat: '11px'
+                    }]
+                })
+            ];
 
-            capasBuseta.push(crearLineaCaminata(caminoSubida));
-            capasBuseta.push(crearLineaCaminata(caminoBajada));
+            capasCaminata.push(...crearLineaCaminata(caminoSubida), ...crearLineaCaminata(caminoBajada));
 
             // 3. Puntos de subida y bajada
             // 3. Punto de subida (círculo cian) y punto de bajada (ícono de persona caminando)
@@ -686,7 +898,8 @@
             datos.puntos.forEach(p => limites.extend(p));
             limites.extend(origen);
             limites.extend(destino);
-            mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
+            mapa.fitBounds(limites, margenesMapa());
+                aplicarVisibilidad();
 
             // 6. Actualizar distancias en la caja de leyenda
             const distBusetaKm = (datos.viaje_m / 1000).toFixed(1);
@@ -702,7 +915,7 @@
             if (datos.radio_usado_m > 500) nota += ' · caminata larga';
             if (datos.sentido_por_confirmar) nota += ' · sentido por confirmar';
             const nombre = datos.ref ? datos.ref + ' · ' + datos.nombre_ruta : datos.nombre_ruta;
-            mostrarAviso('🚌 ' + nombre + ': caminas ' + datos.caminata_origen_m + ' m, viajas ' +
+            anunciar('🚌 ' + nombre + ': caminas ' + datos.caminata_origen_m + ' m, viajas ' +
                 distBusetaKm + ' km y caminas ' + datos.caminata_destino_m +
                 ' m (≈ ' + datos.minutos_estimados + ' min)' + nota, '#00d2ff');
         }
