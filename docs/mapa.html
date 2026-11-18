@@ -65,23 +65,24 @@
         body.menu-abierto .btn-menu span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
 
         /* ---------- Barra lateral izquierda ---------- */
+       /* ---------- Barra lateral izquierda (de borde a borde) ---------- */
         .barra-lateral {
             position: fixed;
             top: 0;
             left: 0;
-            bottom: 40px;               /* deja libre el logo de Google en la esquina inferior izquierda */
+            bottom: 0;                  /* Ocupa todo el alto de la pantalla */
             width: var(--ancho-barra);
             max-width: 100vw;
             z-index: 20;
             display: flex;
             flex-direction: column;
-            background: rgba(15, 23, 42, 0.96);
+            background: rgba(15, 23, 42, 0.97);
             border-right: 1px solid rgba(255, 255, 255, 0.1);
-            border-bottom-right-radius: 14px;
-            box-shadow: 8px 0 24px rgba(0, 0, 0, 0.4);
+            box-shadow: 8px 0 24px rgba(0, 0, 0, 0.45);
             transform: translateX(-105%);
             transition: transform 0.3s ease;
         }
+
 
         body.menu-abierto .barra-lateral { transform: none; }
 
@@ -119,11 +120,22 @@
             color: #ffffff;
         }
 
-        .barra-contenido {
+       .barra-contenido {
             flex: 1;
+            display: flex;
+            flex-direction: column;
             overflow-y: auto;
-            padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+            padding: 14px 14px calc(16px + env(safe-area-inset-bottom));
         }
+
+        /* Scrollbar discreto acorde al tema oscuro */
+        .barra-contenido::-webkit-scrollbar { width: 6px; }
+        .barra-contenido::-webkit-scrollbar-track { background: transparent; }
+        .barra-contenido::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.18);
+            border-radius: 4px;
+        }
+        .barra-contenido::-webkit-scrollbar-thumb:hover { background: #00d2ff; }
 
         .bloque {
             background: rgba(255, 255, 255, 0.04);
@@ -468,9 +480,9 @@
             document.getElementById('aviso-mapa').style.display = 'none';
         }
 
-        function usarMiUbicacion() {
+       function usarMiUbicacion() {
             if (!navigator.geolocation) {
-                alert('Tu navegador no permite obtener la ubicación.');
+                mostrarAviso('Tu navegador no permite obtener la ubicación.', '#ff6b6b');
                 return;
             }
             navigator.geolocation.getCurrentPosition(
@@ -481,7 +493,7 @@
                     mapa.setZoom(16);
                     seguirUsuario();
                 },
-                () => alert('No se pudo obtener tu ubicación. Revisa el permiso del navegador.'),
+                () => mostrarAviso('No se pudo obtener tu ubicación. Revisa el permiso del navegador.', '#ff6b6b'),
                 { enableHighAccuracy: true, timeout: 10000 }
             );
         }
@@ -615,17 +627,16 @@
             document.getElementById('btn-mi-ubicacion').addEventListener('click', usarMiUbicacion);
 
             // --- AQUI MODIFICAMOS EL BOTON DE BUSCAR RUTA ---
-            document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
+         document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
                 if (!coordenadaOrigen || !coordenadaDestino) {
-                    alert('Elige un origen y un destino (escribiéndolos, desde el mapa o con tu ubicación).');
+                    const msg = 'Elige un origen y un destino antes de trazar la ruta.';
+                    escribirResumen(msg, '#ffd166');
+                    mostrarAviso(msg, '#ffd166');
                     return;
                 }
                 reiniciarLeyenda();
-                if (esMovil()) abrirMenu(false);       // en el celular se cierra el menú para ver el mapa
-                // Dibuja la línea blanca de referencia por las calles
+                if (esMovil()) abrirMenu(false);
                 trazarRutaPorCalles(coordenadaOrigen, coordenadaDestino);
-                
-                // Le pide a Python la buseta más cercana
                 buscarBusetaBackend(coordenadaOrigen, coordenadaDestino);
             });
         }
