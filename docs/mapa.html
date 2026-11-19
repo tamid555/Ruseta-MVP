@@ -177,7 +177,7 @@
             font-weight: bold;
             cursor: pointer;
             transition: opacity 0.3s;
-            margin-top: 4px;
+            margin-top: 10px;
         }
 
         .btn-trazar:hover { opacity: 0.9; }
@@ -205,6 +205,81 @@
             word-break: break-word;
         }
 
+        /* ---------- Menú desplegable de Puntos de Interés ---------- */
+        .poi-dropdown {
+            margin-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 10px;
+        }
+
+        .btn-poi-toggle {
+            width: 100%;
+            min-height: 40px;
+            padding: 8px 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .btn-poi-toggle:hover {
+            border-color: #00d2ff;
+            background: #253348;
+        }
+
+     .poi-lista {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 6px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 6px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .poi-lista::-webkit-scrollbar { width: 5px; }
+        .poi-lista::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+
+        .poi-lista.abierto {
+            display: flex;
+        }
+
+        .poi-item {
+            background: transparent;
+            border: none;
+            color: #e2e8f0;
+            padding: 8px 10px;
+            border-radius: 6px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.82rem;
+            display: flex;
+            flex-direction: column;
+            transition: background 0.2s;
+        }
+
+        .poi-item:hover {
+            background: #1e293b;
+            color: #00d2ff;
+        }
+
+        .poi-item small {
+            color: #94a3b8;
+            font-size: 0.72rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         /* Resumen del resultado (se queda fijo, no desaparece) */
         .resumen {
             color: #ffffff;
@@ -216,7 +291,23 @@
             border-left: 3px solid #00d2ff;
             border-radius: 6px;
         }
-
+.pasos-viaje {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .paso-item {
+            font-size: 0.82rem;
+            line-height: 1.35;
+            padding-left: 10px;
+            border-left: 2px solid #334155;
+        }
+        .paso-item.subida { border-left-color: #00d2ff; }
+        .paso-item.bajada { border-left-color: #ffd166; }
+        .paso-item strong { color: #a6e4ff; display: block; font-size: 0.76rem; }
+        .paso-item.bajada strong { color: #ffd166; }
+        
         /* Leyenda con casillas para mostrar u ocultar cada capa */
         .leyenda { display: flex; flex-direction: column; gap: 10px; }
 
@@ -281,7 +372,7 @@
 
             /* 16 px evita que el iPhone haga zoom al escribir en los campos */
             gmp-place-autocomplete { font-size: 16px; }
-            .btn-mini { min-height: 44px; font-size: 0.85rem; }
+            .btn-mini, .btn-poi-toggle { min-height: 44px; font-size: 0.85rem; }
             .btn-trazar { padding: 14px; }
         }
     </style>
@@ -314,6 +405,23 @@
                     <button class="btn-mini" id="btn-destino-mapa">Elegir en el mapa</button>
                 </div>
                 <div class="texto-punto" id="texto-destino">Destino: sin seleccionar</div>
+
+                <!-- MENÚ DESPLEGABLE DE PUNTOS DE INTERÉS -->
+                <div class="poi-dropdown">
+                    <button type="button" class="btn-poi-toggle" id="btn-toggle-poi" aria-expanded="false">
+                        <span> Puntos de Interés en Cúcuta</span>
+                        <span id="flecha-poi">▾</span>
+                    </button>
+                    <div class="poi-lista" id="lista-poi">
+                        <div style="color: #94a3b8; font-size: 0.8rem; padding: 8px; text-align: center;">
+                            Cargando sitios de Google Maps...
+                        </div>
+                    </div>
+                </div>
+<div class="fila-botones" style="margin-top: 10px;">
+                    <button type="button" class="btn-mini" id="btn-invertir">⇅ Invertir A ↔ B</button>
+                    <button type="button" class="btn-mini" id="btn-limpiar">✕ Limpiar</button>
+                </div>
 
                 <button class="btn-trazar" id="btn-buscar-ruta">Trazar Ruta</button>
             </section>
@@ -460,6 +568,116 @@
             document.getElementById('texto-' + cual).textContent =
                 (esOrigen ? 'Origen: ' : 'Destino: ') + (texto || textoCoordenadas(latLng));
         }
+function invertirPuntos() {
+            if (!coordenadaOrigen && !coordenadaDestino) {
+                mostrarAviso('Selecciona al menos un punto para invertir.', '#ffd166');
+                return;
+            }
+            const origCoord = coordenadaOrigen;
+            const destCoord = coordenadaDestino;
+            const origTexto = document.getElementById('texto-origen').textContent.replace(/^Origen:\s*/, '');
+            const destTexto = document.getElementById('texto-destino').textContent.replace(/^Destino:\s*/, '');
+
+            if (marcadoresPunto.origen) { marcadoresPunto.origen.setMap(null); marcadoresPunto.origen = null; }
+            if (marcadoresPunto.destino) { marcadoresPunto.destino.setMap(null); marcadoresPunto.destino = null; }
+            coordenadaOrigen = null;
+            coordenadaDestino = null;
+
+            if (destCoord) {
+                fijarPunto('origen', destCoord, destTexto);
+            } else {
+                document.getElementById('texto-origen').textContent = 'Origen: sin seleccionar';
+            }
+
+            if (origCoord) {
+                fijarPunto('destino', origCoord, origTexto);
+            } else {
+                document.getElementById('texto-destino').textContent = 'Destino: sin seleccionar';
+            }
+
+            if (coordenadaOrigen && coordenadaDestino) {
+                document.getElementById('btn-buscar-ruta').click();
+            }
+        }
+
+        function limpiarTodo() {
+            if (controladorPeticion) controladorPeticion.abort();
+            limpiarCapas();
+            limpiarBuseta();
+            if (marcadoresPunto.origen) { marcadoresPunto.origen.setMap(null); marcadoresPunto.origen = null; }
+            if (marcadoresPunto.destino) { marcadoresPunto.destino.setMap(null); marcadoresPunto.destino = null; }
+            coordenadaOrigen = null;
+            coordenadaDestino = null;
+            document.getElementById('texto-origen').textContent = 'Origen: sin seleccionar';
+            document.getElementById('texto-destino').textContent = 'Destino: sin seleccionar';
+            reiniciarLeyenda();
+            mostrarAviso('Mapa y selección limpiados.', '#00d2ff');
+        }
+        // ---------- Puntos de Interés en Cúcuta ----------
+        function cerrarMenuPOI() {
+            document.getElementById('lista-poi').classList.remove('abierto');
+            document.getElementById('btn-toggle-poi').setAttribute('aria-expanded', 'false');
+            document.getElementById('flecha-poi').textContent = '▾';
+        }
+
+        function elegirPOI(nombre, latLng) {
+            fijarPunto('destino', latLng, nombre);
+            mapa.panTo(latLng);
+            mapa.setZoom(15);
+            cerrarMenuPOI();
+            anunciar(' Destino fijado en: ' + nombre, '#00d2ff');
+        }
+
+        function cargarPOIsRespaldo(listaEl) {
+            const sitios = [
+                { nombre: 'Centro Comercial Unicentro', dir: 'Av. Libertadores, Cúcuta', lat: 7.9045, lng: -72.4852 },
+                { nombre: 'Centro Comercial Ventura Plaza', dir: 'Calle 10 #0-90, Cúcuta', lat: 7.8924, lng: -72.4975 },
+                { nombre: 'Centro Comercial Jardín Plaza', dir: 'Anillo Vial Oriental, Cúcuta', lat: 7.9152, lng: -72.4918 },
+                { nombre: 'Parque Santander', dir: 'Centro, Cúcuta', lat: 7.8914, lng: -72.5078 },
+                { nombre: 'Terminal de Transportes', dir: 'Av. 7 #0N-10, Cúcuta', lat: 7.9123, lng: -72.4912 },
+                { nombre: 'UFPS', dir: 'Av. Gran Colombia, Cúcuta', lat: 7.8984, lng: -72.4875 }
+            ];
+            listaEl.innerHTML = '';
+            sitios.forEach(s => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'poi-item';
+                btn.innerHTML = `<strong>${s.nombre}</strong><small>${s.dir}</small>`;
+                btn.addEventListener('click', () => {
+                    elegirPOI(s.nombre, new google.maps.LatLng(s.lat, s.lng));
+                });
+                listaEl.appendChild(btn);
+            });
+        }
+
+        function cargarPuntosDeInteresGoogle() {
+            const listaEl = document.getElementById('lista-poi');
+            const sitios = [
+                { nombre: 'Parque Santander', dir: 'Centro · Av. 6, Cúcuta', lat: 7.8892, lng: -72.5048 },
+                { nombre: 'C.C. Ventura Plaza', dir: 'Calle 10 y 11, Quinta Vélez', lat: 7.8895, lng: -72.4969 },
+                { nombre: 'C.C. Unicentro Cúcuta', dir: 'Av. Libertadores, Prados del Norte', lat: 7.9073, lng: -72.4882 },
+                { nombre: 'C.C. Jardín Plaza', dir: 'Anillo Vial Oriental #13-70', lat: 7.9255, lng: -72.4842 },
+                { nombre: 'Universidad Simón Bolívar', dir: 'Av. 3 / Calle 15, Los Caobos', lat: 7.8878, lng: -72.4998 },
+                { nombre: 'UFPS (Sede Principal)', dir: 'Av. Gran Colombia #12E-96', lat: 7.8995, lng: -72.4883 },
+                { nombre: 'Hospital Erasmo Meoz', dir: 'Av. 11E, Barrio Guaimaral', lat: 7.9056, lng: -72.4907 },
+                { nombre: 'Terminal de Transporte', dir: 'Av. 7 #0-61, Carora', lat: 7.9022, lng: -72.5082 },
+                { nombre: 'El Malecón', dir: 'Av. Libertadores, Cúcuta', lat: 7.9028, lng: -72.4912 },
+                { nombre: 'Estadio General Santander', dir: 'Av. 1 #4-45, Lleras Restrepo', lat: 7.8965, lng: -72.5015 },
+                { nombre: 'Aeropuerto Camilo Daza', dir: 'Av. Camilo Daza, Zona Norte', lat: 7.9275, lng: -72.5115 }
+            ];
+
+            listaEl.innerHTML = '';
+            sitios.forEach(s => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'poi-item';
+                btn.innerHTML = `<strong>${s.nombre}</strong><small>${s.dir}</small>`;
+                btn.addEventListener('click', () => {
+                    elegirPOI(s.nombre, new google.maps.LatLng(s.lat, s.lng));
+                });
+                listaEl.appendChild(btn);
+            });
+        }
 
         function activarSeleccion(cual) {
             modoSeleccion = cual;
@@ -543,7 +761,7 @@
             };
 
             mapa = new google.maps.Map(document.getElementById("mapa-cucuta"), opcionesMapa);
-        iconOrigen = {
+            iconOrigen = {
                 url: 'assets/icons/origen.svg',
                 scaledSize: new google.maps.Size(52, 52),
                 anchor: new google.maps.Point(26, 44) // Punta exacta del pin escalado
@@ -612,6 +830,15 @@
                 } catch (e) { console.error('Error al leer el destino:', e); }
             });
 
+            document.getElementById('btn-toggle-poi').addEventListener('click', () => {
+                const lista = document.getElementById('lista-poi');
+                const abierto = lista.classList.toggle('abierto');
+                document.getElementById('btn-toggle-poi').setAttribute('aria-expanded', String(abierto));
+                document.getElementById('flecha-poi').textContent = abierto ? '▴' : '▾';
+            });
+
+            cargarPuntosDeInteresGoogle();
+
             mapa.addListener('click', async (e) => {
                 if (!modoSeleccion) return;
                 if (e.placeId) e.stop();
@@ -621,7 +848,8 @@
                 fijarPunto(cual, e.latLng, direccion);
                 if (esMovil()) abrirMenu(true);       // se vuelve a abrir el menú para ver el punto elegido
             });
-
+            document.getElementById('btn-invertir').addEventListener('click', invertirPuntos);
+            document.getElementById('btn-limpiar').addEventListener('click', limpiarTodo);
             document.getElementById('btn-origen-mapa').addEventListener('click', () => activarSeleccion('origen'));
             document.getElementById('btn-destino-mapa').addEventListener('click', () => activarSeleccion('destino'));
             document.getElementById('btn-mi-ubicacion').addEventListener('click', usarMiUbicacion);
@@ -708,7 +936,7 @@
             limites.extend(origen);
             limites.extend(destino);
             mapa.fitBounds(limites, margenesMapa());
-                aplicarVisibilidad();
+            aplicarVisibilidad();
         }
 
         // --- CONEXION CON EL SERVIDOR PYTHON (ruta de la buseta) ---
@@ -832,13 +1060,37 @@
             }
             return [desde, hasta];
         }
+function distanciaMetros(p1, p2) {
+            const R = 6371000;
+            const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+            const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 +
+                      Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) *
+                      Math.sin(dLng / 2) ** 2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
 
+        function dividirTramosContinuos(puntos, maxSaltoMetros = 250) {
+            if (!puntos || !puntos.length) return [];
+            const tramos = [[puntos[0]]];
+            for (let i = 1; i < puntos.length; i++) {
+                if (distanciaMetros(puntos[i - 1], puntos[i]) > maxSaltoMetros) {
+                    tramos.push([puntos[i]]);
+                } else {
+                    tramos[tramos.length - 1].push(puntos[i]);
+                }
+            }
+            return tramos;
+        }
         async function dibujarBuseta(datos, origen, destino) {
             // 1. Tramo de la buseta
-            capasBuseta.push(new google.maps.Polyline({
-                path: datos.puntos, map: mapa,
-                strokeColor: '#00d2ff', strokeOpacity: 1, strokeWeight: 6, zIndex: 999
-            }));
+           // 1. Tramo de la buseta (evita dibujar líneas rectas si OSM tiene saltos)
+            dividirTramosContinuos(datos.puntos).forEach(tramo => {
+                capasBuseta.push(new google.maps.Polyline({
+                    path: tramo, map: mapa,
+                    strokeColor: '#00d2ff', strokeOpacity: 1, strokeWeight: 6, zIndex: 999
+                }));
+            });
 
             // 2. Caminatas reales por las calles
             const coordOrigen = { lat: origen.lat(), lng: origen.lng() };
@@ -872,7 +1124,6 @@
 
             capasCaminata.push(...crearLineaCaminata(caminoSubida), ...crearLineaCaminata(caminoBajada));
 
-            // 3. Puntos de subida y bajada
             // 3. Punto de subida (círculo cian) y punto de bajada (ícono de persona caminando)
             capasBuseta.push(new google.maps.Marker({
                 position: datos.subida,
@@ -910,7 +1161,7 @@
             limites.extend(origen);
             limites.extend(destino);
             mapa.fitBounds(limites, margenesMapa());
-                aplicarVisibilidad();
+            aplicarVisibilidad();
 
             // 6. Actualizar distancias en la caja de leyenda
             const distBusetaKm = (datos.viaje_m / 1000).toFixed(1);
@@ -922,13 +1173,34 @@
                 `Caminata a pie: ${totalCaminataM} m (${datos.caminata_origen_m} m + ${datos.caminata_destino_m} m)`;
 
             // 7. Resumen superior
+            // 7. Resumen superior + Guía de calles exactas de subida y bajada
             let nota = '';
             if (datos.radio_usado_m > 500) nota += ' · caminata larga';
             if (datos.sentido_por_confirmar) nota += ' · sentido por confirmar';
             const nombre = datos.ref ? datos.ref + ' · ' + datos.nombre_ruta : datos.nombre_ruta;
-            anunciar('🚌 ' + nombre + ': caminas ' + datos.caminata_origen_m + ' m, viajas ' +
-                distBusetaKm + ' km y caminas ' + datos.caminata_destino_m +
-                ' m (≈ ' + datos.minutos_estimados + ' min)' + nota, '#00d2ff');
+
+            anunciar('🚌 ' + nombre + ' (≈ ' + datos.minutos_estimados + ' min · ' + distBusetaKm + ' km)' + nota, '#00d2ff');
+
+            const [dirSubida, dirBajada] = await Promise.all([
+                describirPunto(datos.subida),
+                describirPunto(datos.bajada)
+            ]);
+            const calleSubida = dirSubida.split(',')[0];
+            const calleBajada = dirBajada.split(',')[0];
+
+            document.getElementById('resumen-ruta').innerHTML = `
+                <div><strong>🚌 ${nombre}</strong> · ≈ ${datos.minutos_estimados} min</div>
+                <div class="pasos-viaje">
+                    <div class="paso-item subida">
+                        <strong>1. SUBE AQUÍ (camina ${datos.caminata_origen_m} m)</strong>
+                        ${calleSubida}
+                    </div>
+                    <div class="paso-item bajada">
+                        <strong>2. BAJA AQUÍ (camina ${datos.caminata_destino_m} m al destino)</strong>
+                        ${calleBajada}
+                    </div>
+                </div>
+            `;
         }
     </script>
 </body>
