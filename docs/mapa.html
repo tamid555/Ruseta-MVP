@@ -58,6 +58,8 @@
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
             width: 340px;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
         }
 
         .panel-viaje h3 {
@@ -69,10 +71,9 @@
 
         .input-grupo {
             position: relative;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
 
-        /* Adaptación visual para el componente web de Google */
         gmp-place-autocomplete {
             width: 100%;
             --gmp-color-background: #1e293b;
@@ -93,12 +94,13 @@
             font-weight: bold;
             cursor: pointer;
             transition: opacity 0.3s;
-            margin-top: 5px;
+            margin-top: 12px;
         }
 
         .btn-trazar:hover {
             opacity: 0.9;
         }
+
         .fila-botones { display: flex; gap: 8px; margin-bottom: 6px; }
         .btn-mini {
             flex: 1; padding: 7px 8px; background: #1e293b; color: #ffffff;
@@ -106,13 +108,86 @@
         }
         .btn-mini:hover { border-color: #00d2ff; }
         .texto-punto { color: #a6e4ff; font-size: 0.8rem; margin-bottom: 12px; word-break: break-word; }
+
+        /* --- MENÚ DESPLEGABLE DE PUNTOS DE INTERÉS --- */
+        .poi-dropdown {
+            margin-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 10px;
+        }
+
+        .btn-poi-toggle {
+            width: 100%;
+            padding: 9px 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .btn-poi-toggle:hover {
+            border-color: #00d2ff;
+            background: #253348;
+        }
+
+        .poi-lista {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 6px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 6px;
+            max-height: 170px;
+            overflow-y: auto;
+        }
+
+        .poi-lista.abierto {
+            display: flex;
+        }
+
+        .poi-item {
+            background: transparent;
+            border: none;
+            color: #e2e8f0;
+            padding: 8px 10px;
+            border-radius: 6px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.82rem;
+            display: flex;
+            flex-direction: column;
+            transition: background 0.2s;
+        }
+
+        .poi-item:hover {
+            background: #1e293b;
+            color: #00d2ff;
+        }
+
+        .poi-item small {
+            color: #94a3b8;
+            font-size: 0.72rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .aviso-mapa {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
             background: rgba(15, 23, 42, 0.9); color: #ffffff; padding: 10px 18px;
             border-radius: 8px; border: 1px solid #00d2ff; display: none;
         }
+
         /* Caja de Leyenda de Rutas */
-       /* Caja de Leyenda de Rutas */
         .leyenda-mapa {
             position: absolute;
             top: 20px;
@@ -143,20 +218,9 @@
             border-radius: 2px;
         }
 
-        .muestra-blanca {
-            background-color: #ffffff;
-            opacity: 0.9;
-        }
-
-        .muestra-azul {
-            background-color: #00d2ff;
-            box-shadow: 0 0 6px rgba(0, 210, 255, 0.6);
-        }
-
-        .muestra-amarilla {
-            height: 0;
-            border-top: 3px dotted #ffd166;
-        }
+        .muestra-blanca { background-color: #ffffff; opacity: 0.9; }
+        .muestra-azul { background-color: #00d2ff; box-shadow: 0 0 6px rgba(0, 210, 255, 0.6); }
+        .muestra-amarilla { height: 0; border-top: 3px dotted #ffd166; }
     </style>
 </head>
 <body>
@@ -168,7 +232,7 @@
 
         <div class="input-grupo" id="contenedor-origen"></div>
         <div class="fila-botones">
-            <button class="btn-mini" id="btn-origen-mapa"> Elegir en el mapa</button>
+            <button class="btn-mini" id="btn-origen-mapa">Elegir en el mapa</button>
             <button class="btn-mini" id="btn-mi-ubicacion">Usar mi ubicación</button>
         </div>
         <div class="texto-punto" id="texto-origen">Origen: sin seleccionar</div>
@@ -179,11 +243,25 @@
         </div>
         <div class="texto-punto" id="texto-destino">Destino: sin seleccionar</div>
 
+        <!-- MENÚ DESPLEGABLE DE PUNTOS DE INTERÉS -->
+        <div class="poi-dropdown">
+            <button class="btn-poi-toggle" id="btn-toggle-poi">
+                <span>Puntos de Interés en Cúcuta</span>
+                <span id="flecha-poi">▾</span>
+            </button>
+            <div class="poi-lista" id="lista-poi">
+                <div style="color: #94a3b8; font-size: 0.8rem; padding: 8px; text-align: center;">
+                    Cargando sitios de Google Maps...
+                </div>
+            </div>
+        </div>
+
         <button class="btn-trazar" id="btn-buscar-ruta">Trazar Ruta</button>
     </div>
 
     <div class="aviso-mapa" id="aviso-mapa"></div>
-<div class="leyenda-mapa">
+
+    <div class="leyenda-mapa">
         <div class="leyenda-item">
             <span class="linea-muestra muestra-blanca"></span>
             <span id="leyenda-directa">Trayecto directo (Punto A a B)</span>
@@ -197,6 +275,7 @@
             <span id="leyenda-caminata">Caminata a pie</span>
         </div>
     </div>
+
     <div id="mapa-cucuta"></div>
 
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCnEK5NvabRa4y36ZJCeRjLmJforPtaK5w&libraries=places&v=weekly&callback=iniciarMapa"></script>
@@ -243,8 +322,7 @@
             try {
                 const { results } = await new google.maps.Geocoder().geocode({ location: latLng });
                 if (results && results[0]) return results[0].formatted_address;
-            } catch (e) {
-            }
+            } catch (e) {}
             return textoCoordenadas(latLng);
         }
 
@@ -259,6 +337,77 @@
 
             document.getElementById('texto-' + cual).textContent =
                 (esOrigen ? 'Origen: ' : 'Destino: ') + (texto || textoCoordenadas(latLng));
+        }
+
+        // --- CARGAR PUNTOS DE INTERÉS DE GOOGLE MAPS EN CÚCUTA ---
+        async function cargarPuntosDeInteresGoogle() {
+            const listaEl = document.getElementById('lista-poi');
+            try {
+                const { Place } = await google.maps.importLibrary("places");
+                const request = {
+                    textQuery: 'Centros comerciales parques universidades y sitios turisticos en Cucuta Colombia',
+                    fields: ['displayName', 'location', 'formattedAddress'],
+                    locationBias: { lat: 7.89391, lng: -72.50782 },
+                    maxResultCount: 10
+                };
+
+                const { places } = await Place.searchByText(request);
+
+                if (places && places.length > 0) {
+                    listaEl.innerHTML = '';
+                    places.forEach((lugar) => {
+                        const btn = document.createElement('button');
+                        btn.className = 'poi-item';
+                        btn.innerHTML = `
+                            <strong>${lugar.displayName}</strong>
+                            <small>${lugar.formattedAddress || 'Cúcuta, Norte de Santander'}</small>
+                        `;
+                        btn.addEventListener('click', () => {
+                            fijarPunto('destino', lugar.location, lugar.displayName);
+                            mapa.panTo(lugar.location);
+                            mapa.setZoom(15);
+                            // Cerrar el menú automáticamente tras elegir
+                            document.getElementById('lista-poi').classList.remove('abierto');
+                            document.getElementById('flecha-poi').textContent = '▾';
+                            mostrarAviso(`📍 Destino fijado en: ${lugar.displayName}`, '#00d2ff');
+                        });
+                        listaEl.appendChild(btn);
+                    });
+                } else {
+                    cargarPOIsRespaldo(listaEl);
+                }
+            } catch (error) {
+                console.warn('Usando lista local de respaldo para POI:', error);
+                cargarPOIsRespaldo(listaEl);
+            }
+        }
+
+        // Lista de respaldo en caso de que la cuota o red limite searchByText
+        function cargarPOIsRespaldo(listaEl) {
+            const sitios = [
+                { nombre: 'Centro Comercial Unicentro', dir: 'Av. Libertadores, Cúcuta', lat: 7.9045, lng: -72.4852 },
+                { nombre: 'Centro Comercial Ventura Plaza', dir: 'Calle 10 #0-90, Cúcuta', lat: 7.8924, lng: -72.4975 },
+                { nombre: 'Centro Comercial Jardín Plaza', dir: 'Anillo Vial Oriental, Cúcuta', lat: 7.9152, lng: -72.4918 },
+                { nombre: 'Parque Santander', dir: 'Centro, Cúcuta', lat: 7.8914, lng: -72.5078 },
+                { nombre: 'Terminal de Transportes', dir: 'Av. 7 #0N-10, Cúcuta', lat: 7.9123, lng: -72.4912 },
+                { nombre: 'UFPS (Universidad Francisco de Paula Santander)', dir: 'Av. Gran Colombia, Cúcuta', lat: 7.8984, lng: -72.4875 }
+            ];
+            listaEl.innerHTML = '';
+            sitios.forEach(s => {
+                const btn = document.createElement('button');
+                btn.className = 'poi-item';
+                btn.innerHTML = `<strong>${s.nombre}</strong><small>${s.dir}</small>`;
+                btn.addEventListener('click', () => {
+                    const coord = new google.maps.LatLng(s.lat, s.lng);
+                    fijarPunto('destino', coord, s.nombre);
+                    mapa.panTo(coord);
+                    mapa.setZoom(15);
+                    document.getElementById('lista-poi').classList.remove('abierto');
+                    document.getElementById('flecha-poi').textContent = '▾';
+                    mostrarAviso(`📍 Destino fijado en: ${s.nombre}`, '#00d2ff');
+                });
+                listaEl.appendChild(btn);
+            });
         }
 
         function activarSeleccion(cual) {
@@ -312,7 +461,6 @@
             }, () => {}, { enableHighAccuracy: true });
         }
 
-
         async function iniciarMapa() {
             const cucuta = { lat: 7.89391, lng: -72.50782 };
 
@@ -338,25 +486,26 @@
             };
 
             mapa = new google.maps.Map(document.getElementById("mapa-cucuta"), opcionesMapa);
-        iconOrigen = {
+            
+            iconOrigen = {
                 url: 'assets/icons/origen.svg',
                 scaledSize: new google.maps.Size(52, 52),
-                anchor: new google.maps.Point(26, 44) // Punta exacta del pin escalado
+                anchor: new google.maps.Point(26, 44)
             };
             iconDestino = {
                 url: 'assets/icons/destino.svg',
                 scaledSize: new google.maps.Size(52, 52),
-                anchor: new google.maps.Point(26, 44) // Punta exacta del pin escalado
+                anchor: new google.maps.Point(26, 44)
             };
             iconBuseta = {
                 url: 'assets/icons/bus.svg',
                 scaledSize: new google.maps.Size(46, 46),
-                anchor: new google.maps.Point(23, 23) // Centro exacto del círculo
+                anchor: new google.maps.Point(23, 23)
             };
             iconCaminata = {
                 url: 'assets/icons/caminata.svg',
                 scaledSize: new google.maps.Size(46, 46),
-                anchor: new google.maps.Point(23, 23) // Centro exacto del círculo
+                anchor: new google.maps.Point(23, 23)
             };
 
             directionsService = new google.maps.DirectionsService();
@@ -407,6 +556,17 @@
                 } catch (e) { console.error('Error al leer el destino:', e); }
             });
 
+            // Evento para abrir/cerrar el menú de Puntos de Interés
+            document.getElementById('btn-toggle-poi').addEventListener('click', () => {
+                const lista = document.getElementById('lista-poi');
+                const flecha = document.getElementById('flecha-poi');
+                const abierto = lista.classList.toggle('abierto');
+                flecha.textContent = abierto ? '▴' : '▾';
+            });
+
+            // Cargar los sitios populares de Google Maps
+            cargarPuntosDeInteresGoogle();
+
             mapa.addListener('click', async (e) => {
                 if (!modoSeleccion) return;
                 if (e.placeId) e.stop();
@@ -420,16 +580,12 @@
             document.getElementById('btn-destino-mapa').addEventListener('click', () => activarSeleccion('destino'));
             document.getElementById('btn-mi-ubicacion').addEventListener('click', usarMiUbicacion);
 
-            // --- AQUI MODIFICAMOS EL BOTON DE BUSCAR RUTA ---
             document.getElementById('btn-buscar-ruta').addEventListener('click', () => {
                 if (!coordenadaOrigen || !coordenadaDestino) {
                     alert('Elige un origen y un destino (escribiéndolos, desde el mapa o con tu ubicación).');
                     return;
                 }
-                // Dibuja la línea blanca de caminata/auto
                 trazarRutaPorCalles(coordenadaOrigen, coordenadaDestino);
-                
-                // Le pide a Python la buseta más cercana
                 buscarBusetaBackend(coordenadaOrigen, coordenadaDestino);
             });
         }
@@ -439,7 +595,6 @@
         function limpiarCapas() {
             capas.forEach(c => c.setMap(null));
             capas = [];
-            // Reinicia los textos de la leyenda en cada búsqueda nueva
             document.getElementById('leyenda-directa').textContent = 'Trayecto directo (Punto A a B)';
             document.getElementById('leyenda-buseta').textContent = 'Recorrido de la buseta';
             document.getElementById('leyenda-caminata').textContent = 'Caminata a pie';
@@ -470,7 +625,6 @@
                     strokeWeight: 5
                 }));
 
-                // Muestra la distancia de la línea blanca en la leyenda
                 const distDirectaKm = (datos.routes[0].distance / 1000).toFixed(1);
                 document.getElementById('leyenda-directa').textContent = 
                     `Trayecto directo: ${distDirectaKm} km`;
@@ -504,8 +658,6 @@
             limites.extend(destino);
             mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
         }
-
-        // --- CONEXION CON EL SERVIDOR PYTHON (ruta de la buseta) ---
 
         let capasBuseta = [];
         let temporizadorAviso = null;
@@ -613,13 +765,11 @@
         }
 
         async function dibujarBuseta(datos, origen, destino) {
-            // 1. Tramo de la buseta
             capasBuseta.push(new google.maps.Polyline({
                 path: datos.puntos, map: mapa,
                 strokeColor: '#00d2ff', strokeOpacity: 1, strokeWeight: 6, zIndex: 999
             }));
 
-            // 2. Caminatas reales por las calles
             const coordOrigen = { lat: origen.lat(), lng: origen.lng() };
             const coordDestino = { lat: destino.lat(), lng: destino.lng() };
 
@@ -649,8 +799,6 @@
             capasBuseta.push(crearLineaCaminata(caminoSubida));
             capasBuseta.push(crearLineaCaminata(caminoBajada));
 
-            // 3. Puntos de subida y bajada
-            // 3. Punto de subida (círculo cian) y punto de bajada (ícono de persona caminando)
             capasBuseta.push(new google.maps.Marker({
                 position: datos.subida,
                 map: mapa,
@@ -670,7 +818,6 @@
                 zIndex: 1001
             }));
 
-            // 4. Icono único de la buseta recorriendo el tramo
             const marcadorBus = new google.maps.Marker({
                 position: datos.subida,
                 map: mapa,
@@ -681,14 +828,12 @@
             capasBuseta.push(marcadorBus);
             animarMarcadorEnRuta(marcadorBus, datos.puntos);
 
-            // 5. Encuadre de cámara
             const limites = new google.maps.LatLngBounds();
             datos.puntos.forEach(p => limites.extend(p));
             limites.extend(origen);
             limites.extend(destino);
             mapa.fitBounds(limites, { top: 80, right: 80, bottom: 80, left: 400 });
 
-            // 6. Actualizar distancias en la caja de leyenda
             const distBusetaKm = (datos.viaje_m / 1000).toFixed(1);
             const totalCaminataM = datos.caminata_origen_m + datos.caminata_destino_m;
 
@@ -697,7 +842,6 @@
             document.getElementById('leyenda-caminata').textContent = 
                 `Caminata a pie: ${totalCaminataM} m (${datos.caminata_origen_m} m + ${datos.caminata_destino_m} m)`;
 
-            // 7. Resumen superior
             let nota = '';
             if (datos.radio_usado_m > 500) nota += ' · caminata larga';
             if (datos.sentido_por_confirmar) nota += ' · sentido por confirmar';
