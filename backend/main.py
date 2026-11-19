@@ -1,5 +1,6 @@
 import math
 import os
+import random
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -7,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import bcrypt
 import jwt
 import pymysql
+import resend
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +26,9 @@ def distanciaMetros(lat1, lon1, lat2, lon2):
     return R * c
 
 load_dotenv()
+
+resend.api_key = os.getenv("RESEND_API_KEY")
+codigos_recuperacion = {}
 
 app = FastAPI(title="Backend Ruseta - Cúcuta")
 
@@ -67,6 +72,32 @@ class DatosRegistro(BaseModel):
     nombre: str
     email: str
     password: str
+
+class SolicitudRecuperacion(BaseModel):
+    email: str
+
+class RestablecerPassword(BaseModel):
+    email: str
+    codigo: str
+    nueva_password: str
+
+def enviar_correo_codigo(destinatario: str, codigo: str):
+    if not resend.api_key:
+        raise RuntimeError("Falta configurar RESEND_API_KEY")
+
+    resend.Emails.send({
+        "from": "Ruseta <onboarding@resend.dev>",
+        "to": [destinatario],
+        "subject": f"Código de recuperación Ruseta: {codigo}",
+        "html": f"""
+            <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+                <h2>Recuperación de contraseña - RUSETA</h2>
+                <p>Tu código de verificación es:</p>
+                <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">{codigo}</p>
+                <p>Este código vence en 10 minutos. Si no lo solicitaste, ignora este correo.</p>
+            </div>
+        """
+    })
 
 @app.get("/")
 def estado_servidor():
@@ -163,6 +194,72 @@ def iniciar_sesion(datos: DatosLogin):
         "usuario": {"id": usuario["id"], "nombre": usuario["nombre"], "rol": usuario["rol"], "esInvitado": False},
     }
 
+@app.post("/api/solicitar-recuperacion")
+def solicitar_recuperacion(datos: SolicitudRecuperacion):
+    email = datos.email.strip().lower()
+    if not PATRON_CORREO.match(email):
+        raise HTTPException(status_code=400, detail="Escribe un correo válido")
+
+    conexion = conectar_bd()
+    try:
+        with conexion.cursor() as cursor:
+            cursor.execute(
+                "SELECT id FROM usuarios WHERE email = %s AND es_invitado = FALSE",
+                (email,)
+            )
+            usuario = cursor.fetchone()
+    finally:
+        conexion.close()
+
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Este correo no está registrado")
+
+    codigo = str(random.randint(100000, 999999))
+    codigos_recuperacion[email] = {
+        "codigo": codigo,
+        "expira": datetime.now(timezone.utc) + timedelta(minutes=10)
+    }
+
+    try:
+        enviar_correo_codigo(email, codigo)
+        return {"estado": "exito", "mensaje": "Código enviado al correo"}
+    except Exception:
+        raise HTTPException(status_code=500, detail="No se pudo enviar el correo de recuperación")
+
+@app.post("/api/restablecer-password")
+def restablecer_password(datos: RestablecerPassword):
+    email = datos.email.strip().lower()
+    codigo = datos.codigo.strip()
+
+    if len(datos.nueva_password) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+    if len(datos.nueva_password.encode("utf-8")) > 72:
+        raise HTTPException(status_code=400, detail="La contraseña es demasiado larga")
+
+    registro = codigos_recuperacion.get(email)
+    if not registro or registro["codigo"] != codigo:
+        raise HTTPException(status_code=400, detail="Código incorrecto")
+
+    if datetime.now(timezone.utc) > registro["expira"]:
+        del codigos_recuperacion[email]
+        raise HTTPException(status_code=400, detail="El código ha expirado")
+
+    hashClave = bcrypt.hashpw(datos.nueva_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    conexion = conectar_bd()
+    try:
+        with conexion.cursor() as cursor:
+            cursor.execute(
+                "UPDATE usuarios SET password_hash = %s WHERE email = %s AND es_invitado = FALSE",
+                (hashClave, email)
+            )
+        conexion.commit()
+    finally:
+        conexion.close()
+
+    del codigos_recuperacion[email]
+    return {"estado": "exito", "mensaje": "Contraseña actualizada correctamente"}
+
 @app.get("/api/yo")
 def datos_de_mi_cuenta(usuario=Depends(usuarioActual)):
     return {"estado": "exito", "usuario": {"id": usuario["id"], "nombre": usuario["nombre"],
@@ -194,7 +291,7 @@ def obtener_rutas():
             rutas = cursor.fetchall()
     finally:
         conexion.close()
-    return {"estado": "exito", "rutas": [{"id": r["id"], "nombre": r["nombre_ruta"], "ref": r["ref"]} for r in rutas]}
+    return {"estado": "exito", "rutas": [{"id": r["id"], "nombre_ruta": r["nombre_ruta"], "ref": r["ref"]} for r in rutas]}
 
 @app.get("/api/rutas/{ruta_id}/puntos")
 def obtener_puntos_ruta(ruta_id: int):
