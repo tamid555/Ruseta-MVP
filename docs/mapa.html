@@ -216,8 +216,8 @@
             width: 100%;
             min-height: 40px;
             padding: 8px 12px;
-            background: #1e293b;
-            border: 1px solid #334155;
+            background: #293c5eb4;
+            border: 1px solid #00d2ff;
             border-radius: 8px;
             color: #ffffff;
             font-size: 0.82rem;
@@ -319,7 +319,89 @@
             font-size: 0.82rem;
             cursor: pointer;
         }
+/* ---------- Botón y catálogo de Rutas Principales ---------- */
+        .btn-rutas-principales {
+            width: 100%;
+            min-height: 44px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            background: #293c5eb4;
+            border: 1px solid #00d2ff;
+            border-radius: 10px;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 0.86rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s, transform 0.15s;
+        }
+        .btn-rutas-principales:hover {
+            background: #253348;
+        }
 
+        .panel-rutas-principales {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .panel-rutas-principales.abierto {
+            display: flex;
+        }
+
+        .tarjeta-corredor {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-left: 3px solid #00d2ff;
+            border-radius: 10px;
+            padding: 11px 12px;
+        }
+        .tarjeta-corredor h4 {
+            color: #ffffff;
+            font-size: 0.88rem;
+            margin-bottom: 4px;
+        }
+        .tarjeta-corredor p {
+            color: #cbd5e1;
+            font-size: 0.77rem;
+            line-height: 1.35;
+            margin-bottom: 6px;
+        }
+        .meta-horario {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .badge-dato {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #ffd166;
+            font-size: 0.72rem;
+            padding: 3px 7px;
+            border-radius: 6px;
+        }
+        .badge-dato.cian {
+            color: #a6e4ff;
+        }
+        .btn-probar-corredor {
+            width: 100%;
+            padding: 7px 10px;
+            background: rgba(0, 210, 255, 0.14);
+            border: 1px solid rgba(0, 210, 255, 0.45);
+            border-radius: 7px;
+            color: #00d2ff;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+        .btn-probar-corredor:hover {
+            background: #00d2ff;
+            color: #0f172a;
+        }
         .leyenda-item input { accent-color: #00d2ff; width: 16px; height: 16px; flex-shrink: 0; }
 
         .linea-muestra { width: 28px; height: 4px; border-radius: 2px; flex-shrink: 0; }
@@ -391,6 +473,12 @@
 
         <div class="barra-contenido">
             <section class="bloque">
+                <button type="button" class="btn-rutas-principales" id="btn-rutas-principales" aria-expanded="false">
+                <span> Rutas principales y horarios</span>
+                <span id="flecha-rutas-principales">▾</span>
+            </button>
+
+            <section class="panel-rutas-principales" id="panel-rutas-principales"></section>
                 <h3>Planifica tu viaje</h3>
 
                 <div class="input-grupo" id="contenedor-origen"></div>
@@ -568,7 +656,7 @@
             document.getElementById('texto-' + cual).textContent =
                 (esOrigen ? 'Origen: ' : 'Destino: ') + (texto || textoCoordenadas(latLng));
         }
-function invertirPuntos() {
+        function invertirPuntos() {
             if (!coordenadaOrigen && !coordenadaDestino) {
                 mostrarAviso('Selecciona al menos un punto para invertir.', '#ffd166');
                 return;
@@ -677,8 +765,203 @@ function invertirPuntos() {
                 });
                 listaEl.appendChild(btn);
             });
+
+        }
+async function trazarCorredorOficial(corredor) {
+            limpiarBuseta();
+            const puntosControl = [corredor.origen, ...(corredor.waypoints || []), corredor.destino];
+            const coordsStr = puntosControl.map(p => `${p.lng},${p.lat}`).join(';');
+
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+                const respuesta = await fetch(url);
+                const datos = await respuesta.json();
+                if (datos.code !== 'Ok' || !datos.routes.length) throw new Error(datos.code);
+
+                const ruta = datos.routes[0];
+                const puntos = ruta.geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+                const distKm = (ruta.distance / 1000).toFixed(1);
+                const minEstimados = Math.max(8, Math.round((ruta.duration / 60) * 1.35));
+
+                capasBuseta.push(new google.maps.Polyline({
+                    path: puntos,
+                    map: mapa,
+                    strokeColor: '#00d2ff',
+                    strokeOpacity: 1,
+                    strokeWeight: 6,
+                    zIndex: 999
+                }));
+
+                capasBuseta.push(new google.maps.Marker({
+                    position: puntos[0],
+                    map: mapa,
+                    title: 'Inicio del corredor: ' + corredor.origen.nombre,
+                    zIndex: 1000,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 7,
+                        fillColor: '#00d2ff',
+                        fillOpacity: 1,
+                        strokeColor: '#ffffff',
+                        strokeWeight: 2
+                    }
+                }));
+
+                capasBuseta.push(new google.maps.Marker({
+                    position: puntos[puntos.length - 1],
+                    map: mapa,
+                    icon: iconCaminata,
+                    title: 'Fin del corredor: ' + corredor.destino.nombre,
+                    zIndex: 1001
+                }));
+
+                const marcadorBus = new google.maps.Marker({
+                    position: puntos[0],
+                    map: mapa,
+                    icon: iconBuseta,
+                    title: corredor.titulo,
+                    zIndex: 1001
+                });
+                capasBuseta.push(marcadorBus);
+                animarMarcadorEnRuta(marcadorBus, puntos);
+
+                const limites = new google.maps.LatLngBounds();
+                puntos.forEach(p => limites.extend(p));
+                mapa.fitBounds(limites, margenesMapa());
+                aplicarVisibilidad();
+
+                document.getElementById('leyenda-buseta').textContent =
+                    `Recorrido de la buseta: ${distKm} km`;
+                document.getElementById('leyenda-caminata').textContent =
+                    'Caminata a pie: 0 m (abordaje directo en corredor)';
+
+                anunciar(`🚌 ${corredor.titulo} (≈ ${minEstimados} min · ${distKm} km)`, '#00d2ff');
+                document.getElementById('resumen-ruta').innerHTML = `
+                    <div><strong>🚌 ${corredor.titulo}</strong> · ≈ ${minEstimados} min</div>
+                    <div class="pasos-viaje">
+                        <div class="paso-item subida">
+                            <strong>1. PUNTO DE ABORDAJE</strong>
+                            ${corredor.origen.nombre}
+                        </div>
+                        <div class="paso-item bajada">
+                            <strong>2. DESTINO DEL CORREDOR</strong>
+                            ${corredor.destino.nombre}
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('Error trazando corredor oficial:', e);
+                anunciar('No se pudo trazar el corredor en este momento.', '#ff6b6b');
+            }
         }
 
+        function cargarRutasPrincipales() {
+            const contenedor = document.getElementById('panel-rutas-principales');
+            const corredores = [
+                {
+                    titulo: '1. Troncal Atalaya – Centro',
+                    desc: 'Comuneros, Ospina Pérez, Motilones, Claret, Terminal y Av. 5/6/7.',
+                    horario: '4:50 a. m. – 9:30 p. m.',
+                    frecuencia: 'Cada 4–7 min (pico)',
+                    control: 'Control: Redoma Claret / Terminal',
+                    origen: { nombre: 'Redoma Claret (Atalaya)', lat: 7.9158, lng: -72.5325 },
+                    destino: { nombre: 'Parque Santander (Centro)', lat: 7.8892, lng: -72.5048 }
+                },
+                {
+                    titulo: '2. Troncal La Libertad – Centro',
+                    desc: 'Bellavista, San Luis, La Libertad, Puente San Rafael, Av. 0 y Caobos.',
+                    horario: '5:00 a. m. – 9:15 p. m.',
+                    frecuencia: 'Cada 5–8 min (pico)',
+                    control: 'Control: Parque La Libertad / Puente San Rafael',
+                    origen: { nombre: 'Parque Principal La Libertad', lat: 7.8832, lng: -72.4878 },
+                    destino: { nombre: 'Av. 0 con Calle 10 (Centro)', lat: 7.8895, lng: -72.5002 },
+                    waypoints: [
+                        { lat: 7.8838, lng: -72.4925 }, // Puente San Rafael
+                        { lat: 7.8865, lng: -72.4988 }  // Av. 0 / Los Caobos
+                    ]
+                },
+                {
+                    titulo: '3. Troncal Norte (El Salado) – Centro',
+                    desc: 'El Salado, Aeropuerto, Prados del Norte, Unicentro, UFPS y Av. Libertadores.',
+                    horario: '5:00 a. m. – 9:00 p. m.',
+                    frecuencia: 'Cada 6–10 min (pico)',
+                    control: 'Control: Redoma El Salado / Unicentro',
+                    origen: { nombre: 'Sector El Salado / Aeropuerto', lat: 7.9275, lng: -72.5115 },
+                    destino: { nombre: 'C.C. Ventura Plaza / Caobos', lat: 7.8895, lng: -72.4969 }
+                },
+                {
+                    titulo: '4. Metropolitana Los Patios – Centro',
+                    desc: 'Pisarreal, La Sabana, Tierra Linda, Puente San Rafael y Diagonal Santander.',
+                    horario: '4:45 a. m. – 9:45 p. m.',
+                    frecuencia: 'Cada 4–6 min (pico)',
+                    control: 'Control: Parque Los Patios / La Gazapa',
+                    origen: { nombre: 'Parque Principal Los Patios', lat: 7.8375, lng: -72.5042 },
+                    destino: { nombre: 'Av. 0 con Calle 10 (Centro)', lat: 7.8895, lng: -72.5005 }
+                },
+                {
+                    titulo: '5. Metropolitana Villa del Rosario',
+                    desc: 'Villa del Rosario, La Parada, Autopista Internacional y Av. 0 / Centro.',
+                    horario: '4:45 a. m. – 9:45 p. m.',
+                    frecuencia: 'Cada 5–8 min (pico)',
+                    control: 'Control: Parque Los Libertadores / San Mateo',
+                    origen: { nombre: 'Parque Los Libertadores (V. Rosario)', lat: 7.8362, lng: -72.4735 },
+                    destino: { nombre: 'Av. 0 con Calle 10 (Centro)', lat: 7.8895, lng: -72.5005 },
+                    waypoints: [
+                        { lat: 7.8445, lng: -72.4648 }, // Sector La Parada (lado colombiano)
+                        { lat: 7.8685, lng: -72.4820 }, // Autopista Internacional
+                        { lat: 7.8815, lng: -72.4965 }  // Redoma San Mateo
+                    ],
+                    usarCorredorDirecto: true
+                },
+                {
+                    titulo: '6. Transversal Anillo Vial (Periférica)',
+                    desc: 'Conecta Atalaya, Av. Las Américas, Unicentro y Jardín Plaza sin entrar al Centro.',
+                    horario: '5:30 a. m. – 8:30 p. m.',
+                    frecuencia: 'Cada 10–15 min',
+                    control: 'Control: Redoma Atalaya / Jardín Plaza',
+                    origen: { nombre: 'Redoma Atalaya', lat: 7.9158, lng: -72.5325 },
+                    destino: { nombre: 'C.C. Jardín Plaza', lat: 7.9248, lng: -72.4846 },
+                    waypoints: [
+                        { lat: 7.9122, lng: -72.5135 }, // Av. Las Américas / Glorieta Aeropuerto
+                        { lat: 7.9073, lng: -72.4882 }  // C.C. Unicentro (Av. Libertadores)
+                    ],
+                    usarCorredorDirecto: true
+                }
+            ];
+
+            contenedor.innerHTML = '';
+            corredores.forEach(c => {
+                const card = document.createElement('article');
+                card.className = 'tarjeta-corredor';
+                card.innerHTML = `
+                    <h4>${c.titulo}</h4>
+                    <p>${c.desc}</p>
+                    <div class="meta-horario">
+                        <span class="badge-dato">${c.horario}</span>
+                        <span class="badge-dato cian"> ${c.frecuencia}</span>
+                        <span class="badge-dato cian"> ${c.control}</span>
+                    </div>
+                    <button type="button" class="btn-probar-corredor">Trazar este corredor en el mapa</button>
+                `;
+                card.querySelector('.btn-probar-corredor').addEventListener('click', () => {
+                    const orig = new google.maps.LatLng(c.origen.lat, c.origen.lng);
+                    const dest = new google.maps.LatLng(c.destino.lat, c.destino.lng);
+                    fijarPunto('origen', orig, c.origen.nombre);
+                    fijarPunto('destino', dest, c.destino.nombre);
+                    reiniciarLeyenda();
+                    if (esMovil()) abrirMenu(false);
+
+                    if (c.usarCorredorDirecto) {
+                        if (controladorPeticion) controladorPeticion.abort();
+                        trazarRutaPorCalles(orig, dest);
+                        trazarCorredorOficial(c);
+                    } else {
+                        document.getElementById('btn-buscar-ruta').click();
+                    }
+                });
+                contenedor.appendChild(card);
+            });
+        }   
         function activarSeleccion(cual) {
             modoSeleccion = cual;
             if (esMovil()) abrirMenu(false);          // en el celular se cierra el menú para poder tocar el mapa
@@ -838,6 +1121,13 @@ function invertirPuntos() {
             });
 
             cargarPuntosDeInteresGoogle();
+            cargarRutasPrincipales();
+            document.getElementById('btn-rutas-principales').addEventListener('click', () => {
+                const panel = document.getElementById('panel-rutas-principales');
+                const abierto = panel.classList.toggle('abierto');
+                document.getElementById('btn-rutas-principales').setAttribute('aria-expanded', String(abierto));
+                document.getElementById('flecha-rutas-principales').textContent = abierto ? '▴' : '▾';
+            });
 
             mapa.addListener('click', async (e) => {
                 if (!modoSeleccion) return;
