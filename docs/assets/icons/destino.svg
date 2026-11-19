@@ -1,18 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
   <defs>
-    <!-- Filtro de resplandor neón blanco -->
-    <filter id="neonBlanco" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#ffffff" flood-opacity="0.95" />
-      <feDropShadow dx="0" dy="0" stdDeviation="1" flood-color="#e0f7ff" flood-opacity="0.8" />
+    <filter id="sombraSutilB" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.55"/>
     </filter>
   </defs>
-
-  <!-- Cuerpo del pin con borde neón blanco -->
-  <path d="M24 6C16.5 6 10.5 12 10.5 19.5c0 9.5 13.5 21.5 13.5 21.5s13.5-12 13.5-21.5C37.5 12 31.5 6 24 6z" fill="#0f172a" stroke="#ffffff" stroke-width="2.5" filter="url(#neonBlanco)" />
-  
-  <!-- Círculo interior -->
-  <circle cx="24" cy="19" r="8" fill="#ffffff" opacity="0.15" />
-  
-  <!-- Letra B luminosa -->
-  <text x="24" y="23" font-family="Arial, sans-serif" font-size="11.5" font-weight="bold" fill="#ffffff" text-anchor="middle">B</text>
+  <ellipse style="fill: rgb(0, 255, 250);" cx="24.078" cy="42.142" rx="9.528" ry="1.921"/>
+  <circle cx="24" cy="19" r="8.2" opacity="0.12" style="fill: rgb(0, 255, 250);"/>
+  <path d="M24 6C16.5 6 10.5 12 10.5 19.5c0 9.5 13.5 21.5 13.5 21.5s13.5-12 13.5-21.5C37.5 12 31.5 6 24 6z" stroke-width="2.2" filter="url(#sombraSutilB)" style="stroke: rgb(230, 246, 248); fill: rgb(15, 23, 42);"/>
+  <path d="M20 13.5 H24.5 C26.6 13.5 27.9 14.5 27.9 16.2 C27.9 17.4 27.2 18.3 26.1 18.7 C27.5 19.1 28.3 20.1 28.3 21.5 C28.3 23.4 26.8 24.5 24.6 24.5 H20 V13.5 Z M22.3 15.5 V18 H24.2 C25.1 18 25.6 17.5 25.6 16.7 C25.6 15.9 25.1 15.5 24.2 15.5 H22.3 Z M22.3 19.8 V22.5 H24.4 C25.4 22.5 26 22 26 21.1 C26 20.2 25.4 19.8 24.4 19.8 H22.3 Z" style="fill: rgb(0, 255, 250);"/>
 </svg>
